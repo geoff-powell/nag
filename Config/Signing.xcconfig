@@ -1,0 +1,11 @@
+// Your signing details. This is the only file you need to edit before building.
+//
+// DEVELOPMENT_TEAM: your Apple Developer Team ID (Xcode > Settings > Accounts, or
+// developer.apple.com > Membership). Screen Time (Family Controls), app groups and iCloud need a
+// paid developer account.
+//
+// NAG_BUNDLE_ID: something unique to you, e.g. com.yourname.nag. Extension, Mac app, app group and
+// iCloud identifiers are all derived from it.
+
+DEVELOPMENT_TEAM =
+NAG_BUNDLE_ID = com.example.nag
