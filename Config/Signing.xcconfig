@@ -7,5 +7,5 @@
 // NAG_BUNDLE_ID: something unique to you, e.g. com.yourname.nag. Extension, Mac app, app group and
 // iCloud identifiers are all derived from it.
 
-DEVELOPMENT_TEAM =
-NAG_BUNDLE_ID = com.example.nag
+DEVELOPMENT_TEAM = EY47F36LGH
+NAG_BUNDLE_ID = com.greenmiststudios.nag
