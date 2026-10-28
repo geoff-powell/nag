@@ -1,16 +1,23 @@
-name: CI
+name: Tests
 
 on:
   push:
     branches: [main]
   pull_request:
+  # Deploy runs these first.
+  workflow_call:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # In a called workflow, github.workflow is the caller's name, so deploys never cancel push runs.
+  group: tests-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  build:
+  test:
+    name: Test and build
     runs-on: macos-latest
     timeout-minutes: 40
     steps:
@@ -18,7 +25,7 @@ jobs:
 
       - name: Select newest Xcode
         run: |
-          xcode="$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          xcode="$(find /Applications -maxdepth 1 -name 'Xcode*.app' | sort -V | tail -1)"
           sudo xcode-select -s "$xcode"
           xcodebuild -version
 

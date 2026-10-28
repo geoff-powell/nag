@@ -4,8 +4,9 @@
 #   scripts/testflight.sh             archive and upload
 #   scripts/testflight.sh --dry-run   archive and export locally, without uploading
 #
-# Needs: your Apple ID in Xcode > Settings > Accounts, the app created in App Store Connect, and
-# Apple's approval of the Family Controls (Distribution) capability for the app and its extensions.
+# Needs: the app created in App Store Connect, Apple's approval of the Family Controls (Distribution)
+# capability for the app and its extensions, and either your Apple ID in Xcode > Settings > Accounts
+# or an App Store Connect API key (ASC_KEY_PATH, ASC_KEY_ID, ASC_ISSUER_ID; see lib.sh).
 set -euo pipefail
 # shellcheck source-path=SCRIPTDIR
 source "$(dirname "$0")/lib.sh"
@@ -26,7 +27,8 @@ echo "Archiving Nag $(marketing_version) ($build_number) for iPhone…"
 run_xcodebuild "$build_dir/archive.log" \
     -project Nag.xcodeproj -scheme Nag -configuration Release \
     -destination 'generic/platform=iOS' -archivePath "$archive" \
-    -allowProvisioningUpdates CURRENT_PROJECT_VERSION="$build_number" \
+    -allowProvisioningUpdates ${xcode_auth[@]+"${xcode_auth[@]}"} \
+    CURRENT_PROJECT_VERSION="$build_number" \
     archive
 
 write_export_options "$build_dir/ExportOptions.plist" app-store-connect "$destination"
@@ -37,7 +39,8 @@ else
 fi
 run_xcodebuild "$build_dir/export.log" \
     -exportArchive -archivePath "$archive" -exportPath "$build_dir/export" \
-    -exportOptionsPlist "$build_dir/ExportOptions.plist" -allowProvisioningUpdates
+    -exportOptionsPlist "$build_dir/ExportOptions.plist" \
+    -allowProvisioningUpdates ${xcode_auth[@]+"${xcode_auth[@]}"}
 
 if [[ "$destination" == upload ]]; then
     echo "Uploaded build $build_number. It appears in App Store Connect > TestFlight after processing (usually 5–30 minutes)."

@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2034 # xcode_auth is used by the scripts that source this file
 # Shared helpers for the release scripts. Sourced, not run.
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -60,3 +61,16 @@ require_clean_tree() {
         exit 1
     fi
 }
+
+# On CI there's no Apple ID signed in to Xcode, so xcodebuild and notarytool authenticate with an
+# App Store Connect API key instead. Set all three to use it:
+#   ASC_KEY_PATH (the .p8 file), ASC_KEY_ID, ASC_ISSUER_ID
+xcode_auth=()
+if [[ -n "${ASC_KEY_PATH:-}" ]]; then
+    : "${ASC_KEY_ID:?ASC_KEY_ID is required with ASC_KEY_PATH}" "${ASC_ISSUER_ID:?ASC_ISSUER_ID is required with ASC_KEY_PATH}"
+    xcode_auth=(
+        -authenticationKeyPath "$ASC_KEY_PATH"
+        -authenticationKeyID "$ASC_KEY_ID"
+        -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+    )
+fi

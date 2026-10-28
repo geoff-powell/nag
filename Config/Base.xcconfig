@@ -7,6 +7,12 @@ IPHONEOS_DEPLOYMENT_TARGET = 18.0
 MACOSX_DEPLOYMENT_TARGET = 15.0
 SWIFT_VERSION = 6.0
 CODE_SIGN_STYLE = Automatic
+
+// Mac app signing. Locally Xcode manages it. CI can't (every runner is a new, unregistered Mac),
+// so scripts/release-mac.sh switches these to manual Developer ID signing.
+NAG_MAC_CODE_SIGN_STYLE = Automatic
+NAG_MAC_SIGN_IDENTITY = Apple Development
+NAG_MAC_PROFILE =
 MARKETING_VERSION = 1.0
 // Release scripts override this with a timestamp, so every upload gets a new build number.
 CURRENT_PROJECT_VERSION = 1

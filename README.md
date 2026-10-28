@@ -39,7 +39,7 @@ cd Packages/NagKit && swift test
 ```
 
 The scheduling, escalation, quiet hours, unlock and sync rules all live in `NagCore` and are covered
-there. CI (`.github/workflows/ci.yml`) runs them and builds both apps on every push to `main`.
+there. The Tests workflow runs them and builds both apps on every push to `main`.
 
 ## Releasing
 
@@ -87,6 +87,67 @@ scripts/release-mac.sh --dry-run  # archive and export only
 ```
 
 Set `NAG_GITHUB_USER=geoff-powell` if more than one GitHub account is signed in to `gh`.
+
+### Deploying from GitHub Actions
+
+Two workflows:
+
+- **Tests** (`.github/workflows/tests.yml`) runs the unit tests and builds both apps on every push to
+  `main` and every pull request.
+- **Deploy** (`.github/workflows/deploy.yml`) runs the tests, then uploads the iPhone app to
+  TestFlight and publishes the notarized Mac app as a GitHub release. Start it from
+  **Actions → Deploy → Run workflow** (pick iPhone, Mac or both), or push a tag like `v1.0` to
+  deploy both.
+
+CI can't sign in to Xcode, so Deploy needs these repository secrets. Set them once with `gh`
+from this folder, signed in as the repo owner (`gh auth switch --user geoff-powell`).
+
+| Secret | What it is |
+| --- | --- |
+| `ASC_KEY_ID` | App Store Connect API key ID |
+| `ASC_ISSUER_ID` | App Store Connect issuer ID |
+| `ASC_KEY_P8_BASE64` | The API key's `.p8` file, base64 encoded |
+| `SIGNING_CERTS_P12_BASE64` | Your Apple Development and Developer ID Application certificates in one `.p12`, base64 encoded |
+| `SIGNING_CERTS_P12_PASSWORD` | The password you gave that `.p12` |
+| `MAC_PROFILE_BASE64` | Developer ID provisioning profile for the Mac app, base64 encoded (Mac deploys only) |
+
+**1. API key.** In [App Store Connect](https://appstoreconnect.apple.com) go to **Users and Access →
+Integrations → App Store Connect API → Team Keys → +**. Give it the **Admin** role, which Xcode needs
+to manage signing. Download the `.p8` (you only get one chance), then:
+
+```sh
+gh secret set ASC_KEY_ID          # paste the Key ID
+gh secret set ASC_ISSUER_ID       # paste the Issuer ID shown above the keys list
+base64 -i AuthKey_XXXXXXXXXX.p8 | gh secret set ASC_KEY_P8_BASE64
+```
+
+**2. Certificates.** In Xcode, open **Settings → Accounts**, select your team, then **Manage
+Certificates → + → Developer ID Application**. In **Keychain Access → My Certificates**, select both
+*Apple Development: …* and *Developer ID Application: …*, then **File → Export Items** as a `.p12`
+with a password:
+
+```sh
+base64 -i Certificates.p12 | gh secret set SIGNING_CERTS_P12_BASE64
+gh secret set SIGNING_CERTS_P12_PASSWORD
+```
+
+Delete the `.p12` afterwards; it contains your private keys.
+
+**3. Mac provisioning profile.** At [developer.apple.com](https://developer.apple.com/account/resources/profiles/list),
+go to **Profiles → +** and choose **Developer ID** (macOS). Pick the App ID
+`com.greenmiststudios.nag.mac` and your Developer ID certificate, and name it something like
+*Nag Mac Developer ID*. Download it, then:
+
+```sh
+base64 -i Nag_Mac_Developer_ID.provisionprofile | gh secret set MAC_PROFILE_BASE64
+```
+
+If the App ID isn't listed, run the NagMac scheme from Xcode once on your Mac, which registers it.
+The profile expires after a few years. Make a new one and update the secret when it does.
+
+Deploy checks for missing secrets first, on a cheap Linux runner, and fails right away with the
+names of any that are missing. iPhone deploys also need the Family Controls distribution approval
+described above. Mac deploys don't.
 
 ## How it works
 
