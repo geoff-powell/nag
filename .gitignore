@@ -8,3 +8,4 @@ build/
 Packages/NagKit/.swiftpm/
 *.ipa
 *.dSYM.zip
+build/

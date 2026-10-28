@@ -24,9 +24,8 @@ that forget things the moment they leave the screen.
 
 You need a **paid Apple Developer account**. Family Controls (Screen Time), app groups, Time Sensitive
 notifications, NFC and iCloud all need one. The Family Controls entitlement works for development
-builds without approval. Before you can ship to TestFlight or the App Store, request the
-[distribution entitlement](https://developer.apple.com/contact/request/family-controls-distribution)
-for the app and all three extensions.
+builds without approval. Shipping through TestFlight needs Apple's approval first; see
+[Releasing](#releasing).
 
 ### Simulator vs device
 
@@ -40,7 +39,54 @@ cd Packages/NagKit && swift test
 ```
 
 The scheduling, escalation, quiet hours, unlock and sync rules all live in `NagCore` and are covered
-there.
+there. CI (`.github/workflows/ci.yml`) runs them and builds both apps on every push to `main`.
+
+## Releasing
+
+### iPhone: TestFlight
+
+One-time setup:
+
+1. In [App Store Connect](https://appstoreconnect.apple.com), go to **Apps → + → New App**. Choose
+   iOS, pick the bundle ID `com.greenmiststudios.nag`, and give it a name that isn't taken
+   (the name can differ from "Nag" on the home screen).
+2. [Request Family Controls distribution](https://developer.apple.com/contact/request/family-controls-distribution)
+   for all four bundle IDs: the app plus `.monitor`, `.shield-config` and `.shield-action`.
+   Apple reviews this by hand and can take a few weeks. **Uploads fail until it's approved.**
+
+Then, for each build:
+
+```sh
+scripts/testflight.sh            # archive and upload
+scripts/testflight.sh --dry-run  # archive and export locally, no upload
+```
+
+Every run gets a new build number automatically. After processing, add testers in App Store
+Connect → TestFlight.
+
+### Mac: notarized download
+
+TestFlight for Mac only accepts sandboxed apps, and a sandboxed app can't hide or quit other apps.
+So the Mac app ships as a Developer ID–signed, notarized zip attached to a GitHub release.
+
+One-time setup, on the Mac you release from (it must have run NagMac from Xcode once, which
+registers it):
+
+```sh
+xcrun notarytool store-credentials nag-notary --apple-id YOU@EXAMPLE.COM --team-id EY47F36LGH
+```
+
+It asks for an app-specific password, which you create at
+[account.apple.com](https://account.apple.com) → Sign-In and Security → App-Specific Passwords.
+
+Then:
+
+```sh
+scripts/release-mac.sh            # archive, notarize, staple, create a GitHub release
+scripts/release-mac.sh --dry-run  # archive and export only
+```
+
+Set `NAG_GITHUB_USER=geoff-powell` if more than one GitHub account is signed in to `gh`.
 
 ## How it works
 

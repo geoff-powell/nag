@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: |
+          xcode="$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+
+      - name: Unit tests
+        run: swift test --package-path Packages/NagKit
+
+      - name: Build iPhone app and extensions
+        run: >
+          xcodebuild -project Nag.xcodeproj -scheme Nag
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO -quiet build
+
+      - name: Build Mac app
+        run: >
+          xcodebuild -project Nag.xcodeproj -scheme NagMac
+          -destination 'generic/platform=macOS'
+          CODE_SIGNING_ALLOWED=NO -quiet build
