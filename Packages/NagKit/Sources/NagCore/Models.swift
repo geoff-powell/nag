@@ -8,6 +8,8 @@ public enum RepeatRule: String, Codable, CaseIterable, Sendable {
     case daily
     case weekdays
     case weekly
+    /// Comes back at each of the nag's `times`, such as 9 AM Mon, Wed, Fri and 11 PM Tue, Thu.
+    case custom
 
     public var label: String {
         switch self {
@@ -15,7 +17,23 @@ public enum RepeatRule: String, Codable, CaseIterable, Sendable {
         case .daily: "Every day"
         case .weekdays: "Weekdays"
         case .weekly: "Every week"
+        case .custom: "Custom times"
         }
+    }
+}
+
+/// One time of day a custom-schedule nag comes due, on the chosen days.
+public struct NagTime: Codable, Hashable, Identifiable, Sendable {
+    public var id: UUID
+    /// Minutes after midnight.
+    public var minute: Int
+    /// Calendar weekday numbers (1 = Sunday … 7 = Saturday).
+    public var weekdays: Set<Int>
+
+    public init(id: UUID = UUID(), minute: Int = 9 * 60, weekdays: Set<Int> = Set(1...7)) {
+        self.id = id
+        self.minute = minute
+        self.weekdays = weekdays
     }
 }
 
@@ -90,6 +108,8 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
     /// Start of the current occurrence. Nagging begins here.
     public var startAt: Date
     public var repeatRule: RepeatRule
+    /// When a `.custom` nag comes due. Ignored by the other repeat rules.
+    public var times: [NagTime]
     public var style: NagStyle
     public var proof: CompletionProof
     /// Set when a one-off nag is done. Repeating nags move `startAt` to the next occurrence instead.
@@ -105,6 +125,7 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         notes: String = "",
         startAt: Date = .now,
         repeatRule: RepeatRule = .never,
+        times: [NagTime] = [],
         style: NagStyle = NagStyle(),
         proof: CompletionProof = .none,
         now: Date = .now
@@ -116,12 +137,37 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         self.updatedAt = now
         self.startAt = startAt
         self.repeatRule = repeatRule
+        self.times = times
         self.style = style
         self.proof = proof
         self.completedAt = nil
         self.lastCompletedAt = nil
         self.snoozedUntil = nil
         self.snoozeCount = 0
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, notes, createdAt, updatedAt, startAt, repeatRule, times, style, proof
+        case completedAt, lastCompletedAt, snoozedUntil, snoozeCount
+    }
+
+    /// `times` is optional so nags saved before custom schedules existed still load.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        notes = try c.decode(String.self, forKey: .notes)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+        startAt = try c.decode(Date.self, forKey: .startAt)
+        repeatRule = try c.decode(RepeatRule.self, forKey: .repeatRule)
+        times = try c.decodeIfPresent([NagTime].self, forKey: .times) ?? []
+        style = try c.decode(NagStyle.self, forKey: .style)
+        proof = try c.decode(CompletionProof.self, forKey: .proof)
+        completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
+        lastCompletedAt = try c.decodeIfPresent(Date.self, forKey: .lastCompletedAt)
+        snoozedUntil = try c.decodeIfPresent(Date.self, forKey: .snoozedUntil)
+        snoozeCount = try c.decode(Int.self, forKey: .snoozeCount)
     }
 }
 

@@ -75,7 +75,7 @@ struct NagRow: View {
 
     private var tags: Text {
         var parts: [Text] = []
-        if task.isRepeating { parts.append(Text("\(Image(systemName: "repeat")) \(task.repeatRule.label)")) }
+        if task.isRepeating { parts.append(Text("\(Image(systemName: "repeat")) \(task.repeatLabel)")) }
         if needsScan { parts.append(Text("\(Image(systemName: "wave.3.right")) Scan to finish")) }
         return parts.dropFirst().reduce(parts.first ?? Text("")) { Text("\($0)   \($1)") }
     }
