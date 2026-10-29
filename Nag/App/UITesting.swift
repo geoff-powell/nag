@@ -4,7 +4,8 @@ import NagKit
 /// Launch mode for the UI tests in `NagUITests`.
 ///
 /// Launched with `-NagUITesting`, the app uses a fresh store in a temporary folder seeded with a known
-/// set of nags, skips onboarding and stays off iCloud, so tests never see or change real data.
+/// set of nags, skips onboarding, and stays off iCloud, notifications and Screen Time, so tests never see or change
+/// real data, even on a real iPhone.
 /// `NAG_UI_SCENARIO` picks the seed: `sample` (default) or `empty`.
 enum UITesting {
     static let launchArgument = "-NagUITesting"
@@ -24,7 +25,7 @@ enum UITesting {
         let store = SharedStore(directory: directory)
         let scenario = ProcessInfo.processInfo.environment["NAG_UI_SCENARIO"] ?? "sample"
         store.update { $0 = seed(scenario, now: .now, calendar: .current) }
-        return AppModel(store: store, cloudSyncEnabled: false)
+        return AppModel(store: store, isolated: true)
     }
 
     static func seed(_ scenario: String, now: Date, calendar: Calendar) -> NagState {
