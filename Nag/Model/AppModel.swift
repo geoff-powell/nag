@@ -20,9 +20,11 @@ final class AppModel {
     @ObservationIgnored private var changeObservation: SharedStore.ChangeObservation?
     @ObservationIgnored private var cloudSync: CloudTaskSync?
     @ObservationIgnored private var syncTask: Task<Void, Never>?
+    @ObservationIgnored private let cloudSyncEnabled: Bool
 
-    init(store: SharedStore) {
+    init(store: SharedStore, cloudSyncEnabled: Bool = true) {
         self.store = store
+        self.cloudSyncEnabled = cloudSyncEnabled
         self.state = store.load()
         self.screenTimeStatus = AuthorizationCenter.shared.authorizationStatus
     }
@@ -31,6 +33,10 @@ final class AppModel {
         // Extensions write to the store too (a schedule locking, a timed unlock expiring).
         changeObservation = store.observeChanges { [weak self] in
             Task { @MainActor in self?.reload() }
+        }
+        guard cloudSyncEnabled else {
+            sync()
+            return
         }
         let cloud = CloudTaskSync(store: store) { [weak self] in
             Task { @MainActor in
