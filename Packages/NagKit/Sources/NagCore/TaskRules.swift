@@ -62,6 +62,20 @@ extension Calendar {
 extension NagTask {
     public var isRepeating: Bool { repeatRule != .never }
 
+    /// A fresh copy with the same settings and schedule, but none of this nag's progress.
+    public func duplicate(now: Date) -> NagTask {
+        NagTask(
+            title: "\(title) copy",
+            notes: notes,
+            startAt: startAt,
+            repeatRule: repeatRule,
+            times: times.map { NagTime(minute: $0.minute, weekdays: $0.weekdays) },
+            style: style,
+            proof: proof,
+            now: now
+        )
+    }
+
     /// A custom-schedule nag needs at least one time, and every time needs at least one day.
     public var hasValidSchedule: Bool {
         repeatRule != .custom || (!times.isEmpty && times.allSatisfy(\.isValid))

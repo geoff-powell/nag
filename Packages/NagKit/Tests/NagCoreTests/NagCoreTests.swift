@@ -83,6 +83,33 @@ struct TaskRuleTests {
         let snoozed = task.snooze(at: Fixture.date(28, 9))
         #expect(!snoozed)
     }
+
+    @Test func duplicateKeepsSettingsButNotProgress() {
+        var task = NagTask(
+            title: "Meds",
+            notes: "With food",
+            startAt: Fixture.date(28, 8),
+            repeatRule: .custom,
+            times: [NagTime(minute: 8 * 60, weekdays: [2, 4, 6])],
+            style: NagStyle(intervalMinutes: 5, escalation: .relentless),
+            now: Fixture.date(27, 8)
+        )
+        _ = task.snooze(at: Fixture.date(28, 9))
+        let copy = task.duplicate(now: Fixture.date(28, 10))
+        #expect(copy.id != task.id)
+        #expect(copy.title == "Meds copy")
+        #expect(copy.notes == task.notes)
+        #expect(copy.startAt == task.startAt)
+        #expect(copy.repeatRule == .custom)
+        #expect(copy.times.map(\.minute) == [8 * 60])
+        #expect(copy.times.map(\.weekdays) == [[2, 4, 6]])
+        #expect(copy.times[0].id != task.times[0].id)
+        #expect(copy.style == task.style)
+        #expect(copy.createdAt == Fixture.date(28, 10))
+        #expect(copy.snoozeCount == 0)
+        #expect(copy.snoozedUntil == nil)
+        #expect(copy.lastCompletedAt == nil)
+    }
 }
 
 struct CustomScheduleTests {

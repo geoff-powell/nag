@@ -114,6 +114,7 @@ private struct MacNagRow: View {
         .onTapGesture(count: 2, perform: onEdit)
         .contextMenu {
             Button("Edit…", action: onEdit)
+            Button("Duplicate") { model.duplicateTask(task.id) }
             if task.canSnooze(at: now) { Button("Snooze") { model.snooze(task.id) } }
             Divider()
             Button("Delete", role: .destructive) { model.deleteTask(task.id) }

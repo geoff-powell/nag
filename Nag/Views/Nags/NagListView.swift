@@ -93,6 +93,15 @@ struct NagListView: View {
             }
         }
         .listRowBackground(router.focusedTask == task.id ? Color.orange.opacity(0.15) : nil)
+        .contextMenu {
+            Button("Duplicate", systemImage: "plus.square.on.square") {
+                withAnimation { model.duplicateTask(task.id) }
+            }
+            Button("Delete", systemImage: "trash", role: .destructive) {
+                withAnimation { model.deleteTask(task.id) }
+            }
+            .disabled(!model.canDeleteTask(task.id))
+        }
     }
 
     private func complete(_ task: NagTask) {

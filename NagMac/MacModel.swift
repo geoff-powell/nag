@@ -178,6 +178,11 @@ final class MacModel {
         saveTask(NagTask(title: title))
     }
 
+    func duplicateTask(_ id: UUID) {
+        guard let task = state.task(id) else { return }
+        saveTask(task.duplicate(now: .now))
+    }
+
     func canDeleteTask(_ id: UUID) -> Bool {
         !state.isTaskRequiredByEngagedLock(id)
     }
