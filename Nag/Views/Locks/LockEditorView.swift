@@ -227,7 +227,9 @@ struct WeekdayPicker: View {
             ForEach(ordered, id: \.self) { day in
                 let isOn = selection.contains(day)
                 Button(calendar.veryShortWeekdaySymbols[day - 1]) {
-                    if isOn { selection.remove(day) } else { selection.insert(day) }
+                    withAnimation(Motion.quick) {
+                        if isOn { selection.remove(day) } else { selection.insert(day) }
+                    }
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity, minHeight: 34)
@@ -237,6 +239,7 @@ struct WeekdayPicker: View {
                 .accessibilityAddTraits(isOn ? .isSelected : [])
             }
         }
+        .sensoryFeedback(.selection, trigger: selection)
     }
 }
 

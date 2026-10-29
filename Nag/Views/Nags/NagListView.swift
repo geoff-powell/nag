@@ -5,6 +5,7 @@ struct NagListView: View {
     @Environment(AppModel.self) private var model
     @Environment(Router.self) private var router
     @State private var editor: TaskEditorItem?
+    @State private var feedbackTick = 0
 
     var body: some View {
         NavigationStack {
@@ -44,8 +45,9 @@ struct NagListView: View {
                         Text("Done")
                         Spacer()
                         if groups.done.contains(where: \.isFinished) {
-                            Button("Clear") { withAnimation { model.clearFinished() } }
+                            Button("Clear") { withAnimation(Motion.list) { model.clearFinished() } }
                                 .font(.caption)
+                                .transition(.opacity)
                         }
                     }
                 }
@@ -61,8 +63,13 @@ struct NagListView: View {
                     Button("New nag") { editor = .new }
                         .buttonStyle(.borderedProminent)
                 }
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
+        // Also animates changes that don't come from a tap here: a nag coming due, or Done and
+        // Snooze from a notification or another device.
+        .animation(Motion.list, value: groups.signature)
+        .sensoryFeedback(.selection, trigger: feedbackTick)
     }
 
     private func row(_ task: NagTask, now: Date) -> some View {
@@ -73,7 +80,7 @@ struct NagListView: View {
         .onTapGesture { editor = .edit(task) }
         .swipeActions(edge: .leading) {
             if task.canComplete(at: now, calendar: model.calendar) {
-                Button { complete(task) } label: {
+                Button { complete(task, fromSwipe: true) } label: {
                     Label("Done", systemImage: "checkmark")
                 }
                 .tint(.green)
@@ -81,13 +88,13 @@ struct NagListView: View {
         }
         .swipeActions(edge: .trailing) {
             if task.canSnooze(at: now) {
-                Button { model.snooze(task.id) } label: {
+                Button { snooze(task) } label: {
                     Label("Snooze", systemImage: "zzz")
                 }
                 .tint(.indigo)
             }
             if task.isFinished {
-                Button { model.reopen(task.id) } label: {
+                Button { reopen(task) } label: {
                     Label("Reopen", systemImage: "arrow.uturn.backward")
                 }
             }
@@ -95,20 +102,44 @@ struct NagListView: View {
         .listRowBackground(router.focusedTask == task.id ? Color.orange.opacity(0.15) : nil)
         .contextMenu {
             Button("Duplicate", systemImage: "plus.square.on.square") {
-                withAnimation { model.duplicateTask(task.id) }
+                withAnimation(Motion.list) { model.duplicateTask(task.id) }
             }
             Button("Delete", systemImage: "trash", role: .destructive) {
-                withAnimation { model.deleteTask(task.id) }
+                withAnimation(Motion.list) { model.deleteTask(task.id) }
             }
             .disabled(!model.canDeleteTask(task.id))
         }
     }
 
-    private func complete(_ task: NagTask) {
+    /// The check button fills in place before calling this. From the swipe action, the haptic fires
+    /// here and the row waits for the swipe to close before moving to Done.
+    private func complete(_ task: NagTask, fromSwipe: Bool = false) {
         if model.proofKey(for: task) != nil {
             router.showProof(for: task.id)
-        } else {
-            withAnimation { model.complete(task.id) }
+            return
+        }
+        guard fromSwipe else {
+            withAnimation(Motion.list) { model.complete(task.id) }
+            return
+        }
+        feedbackTick += 1
+        afterSwipeCloses { withAnimation(Motion.list) { model.complete(task.id) } }
+    }
+
+    private func snooze(_ task: NagTask) {
+        feedbackTick += 1
+        withAnimation(Motion.list) { model.snooze(task.id) }
+    }
+
+    private func reopen(_ task: NagTask) {
+        feedbackTick += 1
+        afterSwipeCloses { withAnimation(Motion.list) { model.reopen(task.id) } }
+    }
+
+    private func afterSwipeCloses(_ change: @escaping @MainActor () -> Void) {
+        Task { @MainActor in
+            try? await Task.sleep(for: Motion.swipeSettle)
+            change()
         }
     }
 }
@@ -151,5 +182,12 @@ struct NagGroups {
         now.sort { $0.startAt < $1.startAt }
         later.sort { $0.startAt < $1.startAt }
         done.sort { ($0.lastCompletedAt ?? .distantPast) > ($1.lastCompletedAt ?? .distantPast) }
+        signature = [now, later, done].map { section in
+            section.map { "\($0.id)|\($0.isSnoozed(at: date))|\($0.isFinished)" }
+        }
     }
+
+    /// Which nag is in which section, in order, and whether each is snoozed or finished. Changes
+    /// exactly when the list's layout does, not when a relative time like "Overdue 21m" ticks over.
+    private(set) var signature: [[String]] = []
 }

@@ -22,8 +22,13 @@ struct MacNagsView: View {
                     } actions: {
                         Button("New nag") { editing = .new }
                     }
+                    .transition(.opacity)
                 }
             }
+            // Rows slide between sections however they change: here, the menu bar, a notification or the iPhone.
+            .animation(.snappy(duration: 0.32), value: [groups.now, groups.later, groups.done].map { section in
+                section.map { "\($0.id)|\($0.isSnoozed(at: context.date))|\($0.isFinished)" }
+            })
         }
         .navigationTitle("Nags")
         .toolbar {
@@ -83,6 +88,7 @@ private struct MacNagRow: View {
             } label: {
                 Image(systemName: done ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
+                    .contentTransition(.symbolEffect(.replace.downUp))
                     .foregroundStyle(done ? Color.green : task.isOutstanding(at: now) ? .orange : .secondary)
             }
             .buttonStyle(.plain)

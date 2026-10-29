@@ -38,14 +38,15 @@ struct TaskEditorView: View {
 
                 Section("When") {
                     if !isCustom {
-                        Toggle("Start nagging now", isOn: $startNow)
+                        Toggle("Start nagging now", isOn: $startNow.animation(Motion.quick))
                         if !startNow {
                             DatePicker("Starts", selection: $task.startAt)
                         }
                     }
-                    Picker("Repeat", selection: $task.repeatRule) {
+                    Picker("Repeat", selection: $task.repeatRule.animation(Motion.list)) {
                         ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
+                    .accessibilityIdentifier("repeat")
                 }
 
                 if isCustom {
@@ -70,7 +71,7 @@ struct TaskEditorView: View {
                     Picker("Snooze for", selection: $task.style.snoozeMinutes) {
                         ForEach(Self.snoozeLengths, id: \.self) { Text(NagFormat.minutes($0)).tag($0) }
                     }
-                    Toggle("Limit snoozes", isOn: $limitSnoozes)
+                    Toggle("Limit snoozes", isOn: $limitSnoozes.animation(Motion.quick))
                     if limitSnoozes {
                         Stepper(
                             "\(task.style.maxSnoozes ?? 3) per occurrence",
@@ -151,19 +152,26 @@ struct TaskEditorView: View {
                 }
                 .padding(.vertical, 4)
             }
-            .onDelete { task.times.remove(atOffsets: $0) }
+            .onDelete { offsets in
+                withAnimation(Motion.list) { task.times.remove(atOffsets: offsets) }
+            }
             Button("Add time", systemImage: "plus") {
-                task.times.append(NagTime(minute: task.times.last.map { ($0.minute + 60) % 1440 } ?? 9 * 60))
+                withAnimation(Motion.list) {
+                    task.times.append(NagTime(minute: task.times.last.map { ($0.minute + 60) % 1440 } ?? 9 * 60))
+                }
             }
         } header: {
             Text("Times")
         } footer: {
-            if !task.hasValidSchedule {
-                Text("Add at least one time, and pick at least one day for each.")
-                    .foregroundStyle(.red)
-            } else {
-                Text("Nags at each time on its days. Swipe a time to remove it.")
+            Group {
+                if !task.hasValidSchedule {
+                    Text("Add at least one time, and pick at least one day for each.")
+                        .foregroundStyle(.red)
+                } else {
+                    Text("Nags at each time on its days. Swipe a time to remove it.")
+                }
             }
+            .animation(Motion.quick, value: task.hasValidSchedule)
         }
     }
 
