@@ -25,15 +25,24 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         [.banner, .list, .sound]
     }
 
-    /// Done and Snooze run in the background; iOS waits for this to return before suspending again.
+    /// Done and Snooze run in the background; iOS waits for the completion handler before suspending again.
+    ///
+    /// Uses the completion-handler form rather than `async`: the compiler-generated thunk for a
+    /// `nonisolated async` delegate method calls the completion handler off the main thread, which
+    /// trips UIKit's main-thread assertion and crashes the app when a notification is tapped.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse
-    ) async {
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping @Sendable () -> Void
+    ) {
         let userInfo = response.notification.request.content.userInfo
         let taskID = (userInfo[NagID.UserInfo.taskID] as? String).flatMap(UUID.init(uuidString:))
         let profileID = (userInfo[NagID.UserInfo.profileID] as? String).flatMap(UUID.init(uuidString:))
-        await handle(action: response.actionIdentifier, taskID: taskID, profileID: profileID)
+        let action = response.actionIdentifier
+        Task { @MainActor in
+            await self.handle(action: action, taskID: taskID, profileID: profileID)
+            completionHandler()
+        }
     }
 
     private func handle(action: String, taskID: UUID?, profileID: UUID?) async {
