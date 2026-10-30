@@ -17,16 +17,18 @@ enum NagLog {
 public enum NotificationSync {
     public static func registerCategories() {
         let done = UNNotificationAction(identifier: NagID.Action.done, title: "Done", options: [])
-        let snooze = UNNotificationAction(identifier: NagID.Action.snooze, title: "Snooze", options: [])
+        let snooze5 = UNNotificationAction(identifier: NagID.Action.snooze5, title: "Snooze 5 min", options: [])
+        let snooze15 = UNNotificationAction(identifier: NagID.Action.snooze15, title: "Snooze 15 min", options: [])
+        let snooze60 = UNNotificationAction(identifier: NagID.Action.snooze60, title: "Snooze 1 hr", options: [])
         let scan = UNNotificationAction(identifier: NagID.Action.scan, title: "Scan to finish", options: [.foreground])
         let undo = UNNotificationAction(identifier: NagID.Action.undo, title: "Undo", options: [])
         func category(_ identifier: String, _ actions: [UNNotificationAction]) -> UNNotificationCategory {
             UNNotificationCategory(identifier: identifier, actions: actions, intentIdentifiers: [], options: [])
         }
         UNUserNotificationCenter.current().setNotificationCategories([
-            category(NagID.Category.nag, [done, snooze]),
+            category(NagID.Category.nag, [done, snooze5, snooze15, snooze60]),
             category(NagID.Category.nagNoSnooze, [done]),
-            category(NagID.Category.proof, [scan, snooze]),
+            category(NagID.Category.proof, [scan, snooze5, snooze15, snooze60]),
             category(NagID.Category.proofNoSnooze, [scan]),
             category(NagID.Category.alert, []),
             category(NagID.Category.undo, [undo]),

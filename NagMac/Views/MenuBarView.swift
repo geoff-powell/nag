@@ -140,12 +140,15 @@ private struct MenuNagRow: View {
                 }
             }
             if task.canSnooze(at: now) {
-                Button {
-                    model.snooze(task.id)
+                Menu {
+                    ForEach(SnoozeOption.allCases, id: \.self) { option in
+                        Button(option.label) { model.snooze(task.id, minutes: option.minutes) }
+                    }
                 } label: {
-                    Image(systemName: "zzz")
+                    Label("Snooze", systemImage: "zzz")
+                        .labelStyle(.iconOnly)
                 }
-                .help("Snooze \(task.style.snoozeMinutes) minutes")
+                .help("Choose a snooze length")
             }
         }
         .controlSize(.small)

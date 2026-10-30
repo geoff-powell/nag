@@ -7,6 +7,7 @@ struct NagListView: View {
     @State private var editor: TaskEditorItem?
     @State private var feedbackTick = 0
     @State private var undo: (taskID: UUID, deadline: Date)?
+    @State private var snoozeTaskID: UUID?
 
     var body: some View {
         NavigationStack {
@@ -95,6 +96,16 @@ struct NagListView: View {
         // Snooze from a notification or another device.
         .animation(Motion.list, value: groups.signature)
         .sensoryFeedback(.selection, trigger: feedbackTick)
+        // One dialog for the whole list: a dialog per row can fail to present inside a List.
+        .confirmationDialog(
+            "Snooze for",
+            isPresented: Binding(get: { snoozeTaskID != nil }, set: { if !$0 { snoozeTaskID = nil } }),
+            presenting: snoozeTaskID
+        ) { taskID in
+            ForEach(SnoozeOption.allCases, id: \.self) { option in
+                Button(option.label) { snooze(taskID, minutes: option.minutes) }
+            }
+        }
     }
 
     private func row(_ task: NagTask, now: Date) -> some View {
@@ -113,7 +124,7 @@ struct NagListView: View {
         }
         .swipeActions(edge: .trailing) {
             if task.canSnooze(at: now) {
-                Button { snooze(task) } label: {
+                Button { snoozeTaskID = task.id } label: {
                     Label("Snooze", systemImage: "zzz")
                 }
                 .tint(.indigo)
@@ -133,6 +144,13 @@ struct NagListView: View {
             }
             Button("Duplicate", systemImage: "plus.square.on.square") {
                 withAnimation(Motion.list) { model.duplicateTask(task.id) }
+            }
+            if task.canSnooze(at: now) {
+                Menu("Snooze", systemImage: "zzz") {
+                    ForEach(SnoozeOption.allCases, id: \.self) { option in
+                        Button(option.label) { snooze(task, minutes: option.minutes) }
+                    }
+                }
             }
             Button("Delete", systemImage: "trash", role: .destructive) {
                 withAnimation(Motion.list) { model.deleteTask(task.id) }
@@ -164,9 +182,13 @@ struct NagListView: View {
         }
     }
 
-    private func snooze(_ task: NagTask) {
+    private func snooze(_ task: NagTask, minutes: Int) {
+        snooze(task.id, minutes: minutes)
+    }
+
+    private func snooze(_ taskID: UUID, minutes: Int) {
         feedbackTick += 1
-        withAnimation(Motion.list) { model.snooze(task.id) }
+        withAnimation(Motion.list) { model.snooze(taskID, minutes: minutes) }
     }
 
     private func reopen(_ task: NagTask) {

@@ -165,6 +165,10 @@ final class AppModel {
         mutateTask(id) { _ = $0.snooze(at: .now) }
     }
 
+    func snooze(_ id: UUID, minutes: Int) {
+        mutateTask(id) { _ = $0.snooze(at: .now, minutes: minutes) }
+    }
+
     func clearFinished() {
         let finished = state.tasks.filter { $0.isFinished && canDeleteTask($0.id) }.map(\.id)
         guard !finished.isEmpty else { return }
@@ -190,6 +194,12 @@ final class AppModel {
     func snoozeFromNotification(_ id: UUID) async {
         reload()
         snooze(id)
+        await waitForSync()
+    }
+
+    func snoozeFromNotification(_ id: UUID, minutes: Int) async {
+        reload()
+        snooze(id, minutes: minutes)
         await waitForSync()
     }
 

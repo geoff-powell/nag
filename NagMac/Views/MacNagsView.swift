@@ -117,7 +117,12 @@ private struct MacNagRow: View {
                 Image(systemName: "arrow.down.app").foregroundStyle(.secondary).help("From \(source)")
             }
             if task.canSnooze(at: now) {
-                Button("Snooze") { model.snooze(task.id) }.controlSize(.small)
+                Menu("Snooze") {
+                    ForEach(SnoozeOption.allCases, id: \.self) { option in
+                        Button(option.label) { model.snooze(task.id, minutes: option.minutes) }
+                    }
+                }
+                .controlSize(.small)
             }
         }
         .padding(.vertical, 3)
@@ -129,7 +134,13 @@ private struct MacNagRow: View {
                 Link("Open original", destination: link)
             }
             Button("Duplicate") { model.duplicateTask(task.id) }
-            if task.canSnooze(at: now) { Button("Snooze") { model.snooze(task.id) } }
+            if task.canSnooze(at: now) {
+                Menu("Snooze") {
+                    ForEach(SnoozeOption.allCases, id: \.self) { option in
+                        Button(option.label) { model.snooze(task.id, minutes: option.minutes) }
+                    }
+                }
+            }
             Divider()
             Button("Delete", role: .destructive) { model.deleteTask(task.id) }
                 .disabled(!model.canDeleteTask(task.id))
