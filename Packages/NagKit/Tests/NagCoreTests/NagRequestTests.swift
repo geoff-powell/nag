@@ -215,6 +215,15 @@ struct NagLinkTests {
         #expect(daysOnly.times?.first?.weekdays == [1, 7])
     }
 
+    @Test func monthlyAndEveryNDaysFromALink() throws {
+        let monthly = try request("nag://add?title=x&repeat=monthly&month_day=15")
+        #expect(monthly.repeatRule == .monthly)
+        #expect(monthly.monthDay == 15)
+        let every = try request("nag://add?title=x&repeat=every_days&every_days=3")
+        #expect(every.repeatRule == .everyNDays)
+        #expect(every.repeatEvery == 3)
+    }
+
     @Test func badLinksAreRejected() {
         #expect(throws: NagRequestError.unsupportedURL) { try request("https://example.com/add?title=x") }
         #expect(throws: NagRequestError.unsupportedURL) { try request("nag://delete?title=x") }

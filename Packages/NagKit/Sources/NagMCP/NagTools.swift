@@ -63,9 +63,11 @@ public struct NagTools: Sendable {
                         "start_in": ["type": "string", "description": "Start after a delay instead, such as 30m, 2h or 1h30m."],
                         "repeat": [
                             "type": "string",
-                            "enum": ["once", "daily", "weekdays", "weekly", "custom"],
+                            "enum": ["once", "daily", "weekdays", "weekly", "custom", "every_days", "monthly"],
                             "description": "Defaults to once, or custom when times are given.",
                         ],
+                        "every_days": ["type": "integer", "minimum": 1, "maximum": 365, "description": "Days between occurrences when repeat is every_days."],
+                        "month_day": ["type": "integer", "minimum": 1, "maximum": 31, "description": "Preferred day of month when repeat is monthly; short months use their last day."],
                         "times": [
                             "type": "array",
                             "items": ["type": "string", "pattern": "^[0-9]{1,2}:[0-9]{2}$"],
@@ -156,6 +158,7 @@ public struct NagTools: Sendable {
     /// MCP argument names, and the `nag://add` parameter each one maps to.
     private static let createParameters = [
         "title": "title", "notes": "notes", "start": "at", "start_in": "in", "repeat": "repeat",
+        "every_days": "every_days", "month_day": "month_day",
         "times": "times", "days": "days", "interval_minutes": "every", "escalation": "escalation",
         "snooze_minutes": "snooze", "max_snoozes": "snoozes", "break_through_focus": "focus",
         "source": "source", "external_id": "id", "link": "link",
@@ -303,7 +306,7 @@ public struct NagTools: Sendable {
             "needs_key_scan": .bool(task.proof.keyID != nil),
         ]
         if !task.notes.isEmpty { nag["notes"] = .string(task.notes) }
-        if task.repeatRule == .custom { nag["schedule"] = .string(task.repeatLabel) }
+        if task.repeatRule != .never { nag["schedule"] = .string(task.repeatLabel) }
         if let left = task.snoozesLeft { nag["snoozes_left"] = .int(left) }
         if task.isSnoozed(at: now), let until = task.snoozedUntil { nag["snoozed_until"] = .string(Self.timestamp(until, calendar: calendar)) }
         if let done = task.completedAt { nag["completed_at"] = .string(Self.timestamp(done, calendar: calendar)) }

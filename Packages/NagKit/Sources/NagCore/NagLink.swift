@@ -10,7 +10,8 @@ import Foundation
 /// - `at`: ISO 8601 (`2026-10-30T09:00:00Z`), a local date and time (`2026-10-30T09:00`), a date (9 AM
 ///   that day) or a time (`17:30`, the next time it comes round)
 /// - `in`: start after a delay, such as `30m`, `2h` or `1h30m`. Ignored when `at` is given.
-/// - `repeat`: `once`, `daily`, `weekdays`, `weekly` or `custom`
+/// - `repeat`: `once`, `daily`, `weekdays`, `weekly`, `custom`, `every_days` or `monthly`
+/// - `every_days`: interval for `every_days`. `month_day`: preferred day for `monthly`.
 /// - `times`: comma-separated 24-hour times for a custom schedule, such as `09:00,21:00`
 /// - `days`: for those times, such as `mon,wed,fri`, `weekdays`, `weekends` or `daily`. Defaults to every day.
 /// - `every`: minutes between nags. `escalation`: `steady`, `gentle` or `relentless`.
@@ -68,6 +69,12 @@ extension NagRequest {
 
         if let rule = value("repeat") {
             repeatRule = try NagLink.repeatRule(rule)
+        }
+        if let every = value("every_days") {
+            repeatEvery = try NagLink.int(every, parameter: "every days")
+        }
+        if let day = value("month_day") {
+            monthDay = try NagLink.int(day, parameter: "month day")
         }
         let days = try value("days").map(NagLink.weekdays) ?? Set(1...7)
         if let times = value("times", "time") {
@@ -174,6 +181,8 @@ enum NagLink {
         case "weekdays", "weekday": .weekdays
         case "weekly", "week": .weekly
         case "custom": .custom
+        case "every_days": .everyNDays
+        case "monthly", "month": .monthly
         default: throw .invalidValue(parameter: "repeat", value: raw)
         }
     }

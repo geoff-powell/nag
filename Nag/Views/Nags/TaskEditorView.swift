@@ -56,7 +56,7 @@ struct TaskEditorView: View {
                     }
                 }
 
-                Section("When") {
+                Section {
                     if !isCustom {
                         Toggle("Start nagging now", isOn: $startNow.animation(Motion.quick))
                         if !startNow {
@@ -67,6 +67,20 @@ struct TaskEditorView: View {
                         ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
                     .accessibilityIdentifier("repeat")
+                    if task.repeatRule == .everyNDays {
+                        Stepper("Every \(task.repeatEvery) days", value: $task.repeatEvery, in: 1...365)
+                    }
+                    if task.repeatRule == .monthly {
+                        Picker("On day", selection: $task.monthDay) {
+                            ForEach(1...31, id: \.self) { Text("\($0)").tag($0) }
+                        }
+                    }
+                } header: {
+                    Text("When")
+                } footer: {
+                    if task.repeatRule == .monthly {
+                        Text("Months without that day use their last day.")
+                    }
                 }
 
                 if isCustom {

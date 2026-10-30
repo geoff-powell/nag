@@ -17,6 +17,19 @@ enum Fixture {
     }
 }
 
+enum DSTFixture {
+    static let calendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/London")!
+        calendar.locale = Locale(identifier: "en_US_POSIX")
+        return calendar
+    }()
+
+    static func date(_ month: Int, _ day: Int, _ hour: Int, year: Int = 2026) -> Date {
+        calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour))!
+    }
+}
+
 struct TaskRuleTests {
     let calendar = Fixture.calendar
 
@@ -317,6 +330,17 @@ struct CustomScheduleTests {
         #expect(task.occurrence(after: Fixture.date(30, 9), calendar: calendar) == Fixture.date(2, 9, month: 11))
     }
 
+    @Test func customRuleCoversSpecificDaysAndSeveralTimesADay() {
+        let task = meds()
+        let occurrences = sequence(first: Fixture.date(28, 8)) {
+            task.occurrence(after: $0, calendar: calendar)
+        }.dropFirst().prefix(5)
+        #expect(Array(occurrences) == [
+            Fixture.date(28, 9), Fixture.date(29, 23), Fixture.date(30, 9),
+            Fixture.date(2, 9, month: 11), Fixture.date(3, 23, month: 11),
+        ])
+    }
+
     @Test func twiceADayOwesBothBeforeTheDayIsSatisfied() {
         var task = NagTask(
             title: "Stretch",
@@ -372,6 +396,176 @@ struct CustomScheduleTests {
         json.removeValue(forKey: "times")
         let decoded = try JSONDecoder().decode(NagTask.self, from: JSONSerialization.data(withJSONObject: json))
         #expect(decoded == task)
+    }
+}
+
+@Suite struct RepeatRuleTests {
+    private enum OldRepeatRule: String, Decodable {
+        case never, daily, weekdays, weekly, custom
+    }
+
+    private struct OldTask: Decodable {
+        let repeatRule: OldRepeatRule
+    }
+
+    @Test func newRulesRoundTripThroughJSON() throws {
+        var every = NagTask(title: "Water plants", repeatRule: .everyNDays, repeatEvery: 17)
+        every.monthDay = 9
+        let monthly = NagTask(title: "Rent", repeatRule: .monthly, monthDay: 31)
+        for task in [every, monthly] {
+            #expect(try JSONDecoder().decode(NagTask.self, from: JSONEncoder().encode(task)) == task)
+        }
+    }
+
+    @Test func newRulesEncodeALegacySafeRepeatRule() throws {
+        for rule in [RepeatRule.everyNDays, .monthly] {
+            let task = NagTask(title: "Safe", repeatRule: rule)
+            let data = try JSONEncoder().encode(task)
+            let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            #expect(json["repeatRule"] as? String == "daily")
+            #expect(json["repeatKind"] as? String == rule.rawValue)
+            #expect(try JSONDecoder().decode(OldTask.self, from: data).repeatRule == .daily)
+        }
+    }
+
+    @Test func aPayloadWithAnUnknownRuleDecodesAsDaily() throws {
+        let task = NagTask(title: "Future", repeatRule: .monthly)
+        var json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(task)) as? [String: Any])
+        json["repeatKind"] = "yearly"
+        let decoded = try JSONDecoder().decode(NagTask.self, from: JSONSerialization.data(withJSONObject: json))
+        #expect(decoded.repeatRule == .daily)
+    }
+
+    @Test func syncedTasksSurviveAnUndecodableFutureRule() throws {
+        let synced = SyncedTasks(tasks: [NagTask(title: "Future")])
+        var json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(synced)) as? [String: Any])
+        var tasks = try #require(json["tasks"] as? [[String: Any]])
+        tasks[0]["repeatKind"] = "yearly"
+        json["tasks"] = tasks
+        let decoded = try JSONDecoder().decode(SyncedTasks.self, from: JSONSerialization.data(withJSONObject: json))
+        #expect(decoded.tasks.count == 1)
+        #expect(decoded.tasks[0].repeatRule == .daily)
+    }
+
+    @Test func oldPayloadsWithoutRepeatKindStillDecode() throws {
+        let task = NagTask(title: "Old", startAt: Fixture.date(28, 9), repeatRule: .daily)
+        var json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(task)) as? [String: Any])
+        json.removeValue(forKey: "repeatKind")
+        json.removeValue(forKey: "repeatEvery")
+        json.removeValue(forKey: "monthDay")
+        let decoded = try JSONDecoder().decode(NagTask.self, from: JSONSerialization.data(withJSONObject: json))
+        #expect(decoded.repeatRule == .daily)
+        #expect(decoded.repeatEvery == 2)
+        #expect(decoded.monthDay == 28)
+    }
+
+    /// Every device must derive the same day from the same payload, whatever its time zone.
+    @Test func missingMonthDayIsDerivedInUTC() throws {
+        let task = NagTask(title: "Old", startAt: Fixture.date(31, 23, 30), repeatRule: .daily)
+        var json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(task)) as? [String: Any])
+        json.removeValue(forKey: "monthDay")
+        let decoded = try JSONDecoder().decode(NagTask.self, from: JSONSerialization.data(withJSONObject: json))
+        #expect(decoded.monthDay == 31)
+    }
+
+    @Test func hasValidScheduleRejectsZeroNAndDayThirtyTwo() {
+        var task = NagTask(title: "Invalid", repeatRule: .everyNDays)
+        task.repeatEvery = 0
+        #expect(!task.hasValidSchedule)
+        task.repeatRule = .monthly
+        task.monthDay = 32
+        #expect(!task.hasValidSchedule)
+    }
+
+    @Test func newRuleLabelsAndDuplicatesKeepTheirParameters() {
+        let every = NagTask(title: "Water", repeatRule: .everyNDays, repeatEvery: 3)
+        let everyCopy = every.duplicate(now: Fixture.date(28, 10))
+        #expect(every.repeatLabel == "Every 3 days")
+        #expect(everyCopy.repeatRule == .everyNDays)
+        #expect(everyCopy.repeatEvery == 3)
+
+        let monthly = NagTask(title: "Rent", repeatRule: .monthly, monthDay: 31)
+        let monthlyCopy = monthly.duplicate(now: Fixture.date(28, 10))
+        #expect(monthly.repeatLabel == "Monthly on the 31st")
+        #expect(monthlyCopy.repeatRule == .monthly)
+        #expect(monthlyCopy.monthDay == 31)
+    }
+}
+
+@Suite struct EveryNDaysTests {
+    let calendar = Fixture.calendar
+
+    @Test func everyThreeDaysStepsByThree() {
+        let task = NagTask(title: "Water", startAt: Fixture.date(1, 8), repeatRule: .everyNDays, repeatEvery: 3)
+        #expect(task.occurrence(after: Fixture.date(1, 8), calendar: calendar) == Fixture.date(4, 8))
+        #expect(task.occurrence(after: Fixture.date(4, 8), calendar: calendar) == Fixture.date(7, 8))
+        #expect(task.occurrence(after: Fixture.date(7, 8), calendar: calendar) == Fixture.date(10, 8))
+    }
+
+    @Test func everyNDaysWorksBeyondTheOldFifteenDayLimit() {
+        for interval in [20, 45] {
+            let task = NagTask(title: "Long", startAt: Fixture.date(1, 8), repeatRule: .everyNDays, repeatEvery: interval)
+            let expected = calendar.date(byAdding: .day, value: interval, to: Fixture.date(1, 8))
+            #expect(task.occurrence(after: Fixture.date(1, 8), calendar: calendar) == expected)
+        }
+    }
+
+    @Test func everyNDaysKeepsWallClockTimeAcrossDST() {
+        let calendar = DSTFixture.calendar
+        let task = NagTask(title: "DST", startAt: DSTFixture.date(3, 27, 9), repeatRule: .everyNDays, repeatEvery: 3)
+        let next = task.occurrence(after: DSTFixture.date(3, 27, 9), calendar: calendar)
+        #expect(next == DSTFixture.date(3, 30, 9))
+        #expect(next.map { calendar.component(.hour, from: $0) } == 9)
+    }
+
+    @Test func everyNDaysFromAnOverdueAnchor() {
+        let task = NagTask(title: "Overdue", startAt: Fixture.date(1, 8), repeatRule: .everyNDays, repeatEvery: 3)
+        #expect(task.occurrence(after: Fixture.date(28, 9), calendar: calendar) == Fixture.date(31, 8))
+    }
+
+    @Test func completingAnEveryNDaysNagLateSkipsMissedOccurrences() {
+        var task = NagTask(title: "Water", startAt: Fixture.date(1, 8), repeatRule: .everyNDays, repeatEvery: 3)
+        task.complete(at: Fixture.date(28, 9), calendar: calendar)
+        #expect(task.startAt == Fixture.date(31, 8))
+        #expect(task.isSatisfied(at: Fixture.date(28, 12), calendar: calendar))
+        #expect(!task.canComplete(at: Fixture.date(28, 12), calendar: calendar))
+    }
+}
+
+@Suite struct MonthlyTests {
+    let calendar = Fixture.calendar
+
+    private func date(_ year: Int, _ month: Int, _ day: Int, _ hour: Int = 8) -> Date {
+        calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour))!
+    }
+
+    @Test func monthlyKeepsTheOriginalDayAcrossShortMonths() {
+        for year in [2025, 2024] {
+            let january = date(year, 1, 31)
+            let task = NagTask(title: "Month end", startAt: january, repeatRule: .monthly, monthDay: 31)
+            let februaryDay = year == 2024 ? 29 : 28
+            let february = task.occurrence(after: january, calendar: calendar)
+            #expect(february == date(year, 2, februaryDay))
+            #expect(february.flatMap { task.occurrence(after: $0, calendar: calendar) } == date(year, 3, 31))
+        }
+    }
+
+    @Test func monthlyOnTheFirstIsStable() {
+        let task = NagTask(title: "First", startAt: date(2026, 1, 1), repeatRule: .monthly, monthDay: 1)
+        #expect(task.occurrence(after: date(2026, 1, 1), calendar: calendar) == date(2026, 2, 1))
+    }
+
+    @Test func monthlyAcrossAYearBoundary() {
+        let task = NagTask(title: "Year", startAt: date(2026, 12, 15), repeatRule: .monthly, monthDay: 15)
+        #expect(task.occurrence(after: date(2026, 12, 15), calendar: calendar) == date(2027, 1, 15))
+    }
+
+    @Test func monthlyKeepsWallClockTimeAcrossDST() {
+        let calendar = DSTFixture.calendar
+        let task = NagTask(title: "DST", startAt: DSTFixture.date(3, 28, 9), repeatRule: .monthly, monthDay: 28)
+        let next = task.occurrence(after: DSTFixture.date(3, 28, 9), calendar: calendar)
+        #expect(next == DSTFixture.date(4, 28, 9))
+        #expect(next.map { calendar.component(.hour, from: $0) } == 9)
     }
 }
 
