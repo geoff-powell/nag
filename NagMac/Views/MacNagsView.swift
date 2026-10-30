@@ -7,11 +7,13 @@ struct MacNagsView: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
-            let groups = MacNagGroups(tasks: model.state.tasks, now: context.date, calendar: model.calendar)
+            // The tick's date can be up to 30s old when a change re-renders the list.
+            let now = max(context.date, .now)
+            let groups = MacNagGroups(tasks: model.state.tasks, now: now, calendar: model.calendar)
             List {
-                section("Now", groups.now, now: context.date)
-                section("Coming up", groups.later, now: context.date)
-                section("Done", groups.done, now: context.date)
+                section("Now", groups.now, now: now)
+                section("Coming up", groups.later, now: now)
+                section("Done", groups.done, now: now)
             }
             .overlay {
                 if model.state.tasks.isEmpty {
@@ -27,7 +29,7 @@ struct MacNagsView: View {
             }
             // Rows slide between sections however they change: here, the menu bar, a notification or the iPhone.
             .animation(.snappy(duration: 0.32), value: [groups.now, groups.later, groups.done].map { section in
-                section.map { "\($0.id)|\($0.isSnoozed(at: context.date))|\($0.isFinished)" }
+                section.map { "\($0.id)|\($0.isSnoozed(at: now))|\($0.isFinished)" }
             })
         }
         .navigationTitle("Nags")

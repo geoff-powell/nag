@@ -10,7 +10,9 @@ struct NagListView: View {
     var body: some View {
         NavigationStack {
             TimelineView(.periodic(from: .now, by: 30)) { context in
-                list(now: context.date)
+                // The tick's date can be up to 30s old when a change re-renders the list, so a nag that
+                // just started would read "Starts now" until the next tick.
+                list(now: max(context.date, .now))
             }
             .navigationTitle("Nags")
             .toolbar {

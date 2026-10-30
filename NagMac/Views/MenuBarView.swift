@@ -7,7 +7,8 @@ struct MenuBarView: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 15)) { context in
-            content(now: context.date)
+            // The tick's date can be up to 15s old when a change re-renders the menu.
+            content(now: max(context.date, .now))
         }
         .frame(width: 340)
     }
