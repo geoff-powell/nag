@@ -58,7 +58,7 @@ final class NagUITests: XCTestCase {
         title.tap()
         title.typeText("Vitamins")
 
-        chooseRepeat("Custom times")
+        chooseRepeat("Custom")
         XCTAssertTrue(app.staticTexts["Times"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.switches["Start nagging now"].exists)
         pause()
@@ -88,7 +88,7 @@ final class NagUITests: XCTestCase {
         XCTAssertTrue(title.waitForExistence(timeout: 3))
         title.tap()
         title.typeText("Never")
-        chooseRepeat("Custom times")
+        chooseRepeat("Custom")
         XCTAssertTrue(weekday("Sunday", time: 0).waitForExistence(timeout: 3))
         for day in ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] {
             weekday(day, time: 0).tap()
