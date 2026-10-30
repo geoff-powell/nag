@@ -223,6 +223,20 @@ final class NagUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Oops"].exists)
     }
 
+    // MARK: - Settings
+
+    func testLongPressingTheSettingsTitleShowsTheVersion() {
+        launch()
+        app.tabBars.buttons["Settings"].tap()
+        let title = app.descendants(matching: .any)["settings.title"].firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 3))
+        XCTAssertFalse(title.label.contains("Version"), title.label)
+
+        title.press(forDuration: 1)
+        XCTAssertTrue(wait(for: title, labelContaining: "Version"))
+        pause()
+    }
+
     // MARK: - Helpers
 
     private func launch(scenario: String = "sample") {
@@ -258,6 +272,11 @@ final class NagUITests: XCTestCase {
 
     private func wait(for element: XCUIElement, value: String, timeout: TimeInterval = 3) -> Bool {
         let predicate = NSPredicate(format: "value == %@", value)
+        return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: element)], timeout: timeout) == .completed
+    }
+
+    private func wait(for element: XCUIElement, labelContaining text: String, timeout: TimeInterval = 3) -> Bool {
+        let predicate = NSPredicate(format: "label CONTAINS %@", text)
         return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: element)], timeout: timeout) == .completed
     }
 
