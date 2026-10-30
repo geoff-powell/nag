@@ -247,6 +247,27 @@ final class MacModel {
         mutateTask(id) { $0.reopen(at: .now) }
     }
 
+    func undo(_ id: UUID) {
+        reload()
+        guard state.task(id)?.canUndoCompletion(at: .now) == true else { return }
+        mutateTask(id) { _ = $0.undoCompletion(at: .now) }
+        NotificationSync.removeDeliveredUndoFollowUp(taskID: id)
+    }
+
+    func completeFromNotification(_ id: UUID) async {
+        reload()
+        complete(id)
+        await waitForNotificationSync()
+        if let task = state.task(id), task.canUndoCompletion(at: .now) {
+            await NotificationSync.undoFollowUp(task: task)
+        }
+    }
+
+    func undoFromNotification(_ id: UUID) async {
+        undo(id)
+        await waitForNotificationSync()
+    }
+
     func clearFinished() {
         let finished = state.tasks.filter { $0.isFinished && canDeleteTask($0.id) }.map(\.id)
         guard !finished.isEmpty else { return }

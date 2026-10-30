@@ -4,6 +4,7 @@ import SwiftUI
 struct MenuBarView: View {
     @Environment(MacModel.self) private var model
     @State private var quickTitle = ""
+    @State private var undo: (taskID: UUID, deadline: Date)?
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 15)) { context in
@@ -29,8 +30,24 @@ struct MenuBarView: View {
             } else {
                 Text("Due now").font(.headline)
                 ForEach(groups.now) { task in
-                    MenuNagRow(task: task, now: now)
+                    MenuNagRow(task: task, now: now) { showUndo(for: task.id) }
                 }
+            }
+
+            if let undo {
+                HStack {
+                    Text("Marked done")
+                    Spacer()
+                    Button("Undo") {
+                        model.undo(undo.taskID)
+                        self.undo = nil
+                    }
+                    Button("Dismiss", systemImage: "xmark") { self.undo = nil }
+                        .labelStyle(.iconOnly)
+                }
+                .padding(8)
+                .background(.regularMaterial, in: Capsule())
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
             if !groups.later.isEmpty {
@@ -82,12 +99,24 @@ struct MenuBarView: View {
             }
         }
         .padding(14)
+        .animation(.snappy(duration: 0.38), value: undo?.deadline)
+    }
+
+    private func showUndo(for taskID: UUID) {
+        let deadline = Date.now.addingTimeInterval(NagUndo.toastDuration)
+        undo = (taskID, deadline)
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(NagUndo.toastDuration))
+            guard undo?.deadline == deadline else { return }
+            undo = nil
+        }
     }
 }
 
 private struct MenuNagRow: View {
     let task: NagTask
     let now: Date
+    let onComplete: () -> Void
     @Environment(MacModel.self) private var model
 
     var body: some View {
@@ -105,7 +134,10 @@ private struct MenuNagRow: View {
                 Image(systemName: "iphone.radiowaves.left.and.right")
                     .help("Scan on iPhone to finish")
             } else {
-                Button("Done") { model.complete(task.id) }
+                Button("Done") {
+                    model.complete(task.id)
+                    onComplete()
+                }
             }
             if task.canSnooze(at: now) {
                 Button {

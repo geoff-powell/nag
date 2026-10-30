@@ -45,12 +45,30 @@ public enum TaskMerge {
         var (newer, older) = a.updatedAt != b.updatedAt
             ? (a.updatedAt > b.updatedAt ? (a, b) : (b, a))
             : (a.id.uuidString >= b.id.uuidString && a.title >= b.title ? (a, b) : (b, a))
-        if let olderDone = older.lastCompletedAt, olderDone > (newer.lastCompletedAt ?? .distantPast) {
+        let undone = max(a.undoneCompletionAt ?? .distantPast, b.undoneCompletionAt ?? .distantPast)
+        let undoneCopy = newer.undoneCompletionAt == undone && newer.lastCompletedAt != undone
+            ? newer
+            : older
+        newer.undoneCompletionAt = undone == .distantPast ? nil : undone
+
+        if undone != .distantPast,
+           let newerDone = newer.lastCompletedAt,
+           newerDone <= undone {
+            newer.startAt = undoneCopy.startAt
+            newer.lastCompletedAt = undoneCopy.lastCompletedAt
+            newer.completedAt = undoneCopy.completedAt
+            newer.snoozedUntil = undoneCopy.snoozedUntil
+            newer.snoozeCount = undoneCopy.snoozeCount
+            newer.completionUndo = undoneCopy.completionUndo
+        } else if let olderDone = older.lastCompletedAt,
+           olderDone > (newer.lastCompletedAt ?? .distantPast),
+           olderDone > undone {
             newer.lastCompletedAt = olderDone
             newer.completedAt = older.completedAt ?? newer.completedAt
             if newer.isRepeating { newer.startAt = max(newer.startAt, older.startAt) }
             newer.snoozedUntil = older.snoozedUntil
             newer.snoozeCount = older.snoozeCount
+            newer.completionUndo = older.completionUndo
         }
         return newer
     }
