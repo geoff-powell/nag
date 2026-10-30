@@ -153,7 +153,7 @@ struct NagLinkTests {
     }
 
     @Test func minimalLink() throws {
-        let request = try request("nag://add?title=Take%20pills")
+        let request = try self.request("nag://add?title=Take%20pills")
         #expect(request == NagRequest(title: "Take pills"))
     }
 
@@ -162,7 +162,7 @@ struct NagLinkTests {
     }
 
     @Test func everyParameter() throws {
-        let request = try request(
+        let request = try self.request(
             "nag://add?text=Stretch&notes=Just%20one&at=2026-10-29T08:30&repeat=weekdays&every=5"
                 + "&escalation=relentless&snooze=15&snoozes=unlimited&focus=no&source=Muse&id=card-42"
                 + "&link=https%3A%2F%2Fmuse.app%2Fcard"
@@ -193,7 +193,7 @@ struct NagLinkTests {
     }
 
     @Test func customTimesAndDays() throws {
-        let request = try request("nag://add?title=Pills&times=09:00,21:30&days=mon,Wednesday,fri")
+        let request = try self.request("nag://add?title=Pills&times=09:00,21:30&days=mon,Wednesday,fri")
         #expect(request.times?.map(\.minute) == [540, 1290])
         #expect(request.times?.allSatisfy { $0.weekdays == [2, 4, 6] } == true)
 
@@ -214,7 +214,7 @@ struct NagLinkTests {
     }
 
     @Test func linkWithoutTitleParsesButCantBeSaved() throws {
-        let request = try request("nag://add?notes=hi")
+        let request = try self.request("nag://add?notes=hi")
         var state = NagState()
         #expect(throws: NagRequestError.missingTitle) { try state.apply(request, now: now, calendar: calendar) }
     }
