@@ -22,8 +22,13 @@ struct MacNagsView: View {
                     } actions: {
                         Button("New nag") { editing = .new }
                     }
+                    .transition(.opacity)
                 }
             }
+            // Rows slide between sections however they change: here, the menu bar, a notification or the iPhone.
+            .animation(.snappy(duration: 0.32), value: [groups.now, groups.later, groups.done].map { section in
+                section.map { "\($0.id)|\($0.isSnoozed(at: context.date))|\($0.isFinished)" }
+            })
         }
         .navigationTitle("Nags")
         .toolbar {
@@ -83,6 +88,7 @@ private struct MacNagRow: View {
             } label: {
                 Image(systemName: done ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
+                    .contentTransition(.symbolEffect(.replace.downUp))
                     .foregroundStyle(done ? Color.green : task.isOutstanding(at: now) ? .orange : .secondary)
             }
             .buttonStyle(.plain)
@@ -103,7 +109,7 @@ private struct MacNagRow: View {
                     .help("Needs a key scan on iPhone to finish")
             }
             if task.isRepeating {
-                Image(systemName: "repeat").foregroundStyle(.secondary).help(task.repeatRule.label)
+                Image(systemName: "repeat").foregroundStyle(.secondary).help(task.repeatLabel)
             }
             if task.canSnooze(at: now) {
                 Button("Snooze") { model.snooze(task.id) }.controlSize(.small)
@@ -114,6 +120,7 @@ private struct MacNagRow: View {
         .onTapGesture(count: 2, perform: onEdit)
         .contextMenu {
             Button("Edit…", action: onEdit)
+            Button("Duplicate") { model.duplicateTask(task.id) }
             if task.canSnooze(at: now) { Button("Snooze") { model.snooze(task.id) } }
             Divider()
             Button("Delete", role: .destructive) { model.deleteTask(task.id) }
@@ -144,17 +151,21 @@ struct MacTaskEditor: View {
     @Environment(MacModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     private let isNew: Bool
+    private let original: NagTask?
     @State private var task: NagTask
     @State private var startNow: Bool
     @State private var limitSnoozes: Bool
 
     init(task: NagTask?) {
         isNew = task == nil
+        original = task
         let initial = task ?? NagTask(title: "")
         _task = State(initialValue: initial)
         _startNow = State(initialValue: task == nil)
         _limitSnoozes = State(initialValue: initial.style.maxSnoozes != nil)
     }
+
+    private var isCustom: Bool { task.repeatRule == .custom }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -165,13 +176,18 @@ struct MacTaskEditor: View {
                         .lineLimit(1...4)
                 }
                 Section("When") {
-                    if isNew { Toggle("Start nagging now", isOn: $startNow) }
-                    if !startNow || !isNew {
-                        DatePicker("Starts", selection: $task.startAt)
+                    if !isCustom {
+                        if isNew { Toggle("Start nagging now", isOn: $startNow) }
+                        if !startNow || !isNew {
+                            DatePicker("Starts", selection: $task.startAt)
+                        }
                     }
                     Picker("Repeat", selection: $task.repeatRule) {
                         ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
+                }
+                if isCustom {
+                    timesSection
                 }
                 Section {
                     Picker("Nag every", selection: $task.style.intervalMinutes) {
@@ -219,16 +235,71 @@ struct MacTaskEditor: View {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Save") {
-                    if isNew && startNow { task.startAt = .now }
+                    if isNew && startNow && !isCustom { task.startAt = .now }
+                    task.alignStartToSchedule(previous: original, now: .now, calendar: model.calendar)
                     if !limitSnoozes { task.style.maxSnoozes = nil }
                     model.saveTask(task)
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(task.title.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(task.title.trimmingCharacters(in: .whitespaces).isEmpty || !task.hasValidSchedule)
             }
             .padding()
         }
-        .frame(width: 480, height: 600)
+        .frame(width: 560, height: 600)
+        .onChange(of: task.repeatRule) { _, rule in
+            if rule == .custom, task.times.isEmpty {
+                task.times = [NagTime(minute: minuteOfDay(task.startAt))]
+            }
+        }
+    }
+
+    private var timesSection: some View {
+        Section {
+            ForEach($task.times) { $time in
+                HStack {
+                    DatePicker("Time", selection: minuteBinding($time.minute), displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                    Spacer()
+                    ForEach(1...7, id: \.self) { day in
+                        Toggle(model.calendar.veryShortWeekdaySymbols[day - 1], isOn: Binding(
+                            get: { time.weekdays.contains(day) },
+                            set: { on in
+                                if on { time.weekdays.insert(day) } else { time.weekdays.remove(day) }
+                            }
+                        ))
+                        .toggleStyle(.button)
+                        .help(model.calendar.weekdaySymbols[day - 1])
+                    }
+                    Button("Remove time", systemImage: "minus.circle") {
+                        task.times.removeAll { $0.id == time.id }
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                }
+            }
+            Button("Add time", systemImage: "plus") {
+                task.times.append(NagTime(minute: task.times.last.map { ($0.minute + 60) % 1440 } ?? 9 * 60))
+            }
+            if !task.hasValidSchedule {
+                Text("Add at least one time, and pick at least one day for each.").foregroundStyle(.red)
+            }
+        } header: {
+            Text("Times")
+        }
+    }
+
+    private func minuteOfDay(_ date: Date) -> Int {
+        let parts = model.calendar.dateComponents([.hour, .minute], from: date)
+        return (parts.hour ?? 9) * 60 + (parts.minute ?? 0)
+    }
+
+    private func minuteBinding(_ minute: Binding<Int>) -> Binding<Date> {
+        Binding(
+            get: {
+                model.calendar.date(bySettingHour: minute.wrappedValue / 60, minute: minute.wrappedValue % 60, second: 0, of: .now) ?? .now
+            },
+            set: { minute.wrappedValue = minuteOfDay($0) }
+        )
     }
 }

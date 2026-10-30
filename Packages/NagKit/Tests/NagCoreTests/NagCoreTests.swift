@@ -83,6 +83,116 @@ struct TaskRuleTests {
         let snoozed = task.snooze(at: Fixture.date(28, 9))
         #expect(!snoozed)
     }
+
+    @Test func duplicateKeepsSettingsButNotProgress() {
+        var task = NagTask(
+            title: "Meds",
+            notes: "With food",
+            startAt: Fixture.date(28, 8),
+            repeatRule: .custom,
+            times: [NagTime(minute: 8 * 60, weekdays: [2, 4, 6])],
+            style: NagStyle(intervalMinutes: 5, escalation: .relentless),
+            now: Fixture.date(27, 8)
+        )
+        _ = task.snooze(at: Fixture.date(28, 9))
+        let copy = task.duplicate(now: Fixture.date(28, 10))
+        #expect(copy.id != task.id)
+        #expect(copy.title == "Meds copy")
+        #expect(copy.notes == task.notes)
+        #expect(copy.startAt == task.startAt)
+        #expect(copy.repeatRule == .custom)
+        #expect(copy.times.map(\.minute) == [8 * 60])
+        #expect(copy.times.map(\.weekdays) == [[2, 4, 6]])
+        #expect(copy.times[0].id != task.times[0].id)
+        #expect(copy.style == task.style)
+        #expect(copy.createdAt == Fixture.date(28, 10))
+        #expect(copy.snoozeCount == 0)
+        #expect(copy.snoozedUntil == nil)
+        #expect(copy.lastCompletedAt == nil)
+    }
+}
+
+struct CustomScheduleTests {
+    let calendar = Fixture.calendar
+
+    /// 9 AM Mon, Wed, Fri and 11 PM Tue, Thu.
+    func meds(startAt: Date = Fixture.date(28, 9)) -> NagTask {
+        NagTask(
+            title: "Meds",
+            startAt: startAt,
+            repeatRule: .custom,
+            times: [NagTime(minute: 9 * 60, weekdays: [2, 4, 6]), NagTime(minute: 23 * 60, weekdays: [3, 5])],
+            now: Fixture.date(27, 20)
+        )
+    }
+
+    @Test func nextOccurrenceIsTheEarliestTime() {
+        let task = meds()
+        // Wed 28.
+        #expect(task.occurrence(after: Fixture.date(28, 8), calendar: calendar) == Fixture.date(28, 9))
+        #expect(task.occurrence(after: Fixture.date(28, 9), calendar: calendar) == Fixture.date(29, 23))
+        // Thu 29 -> Fri 30.
+        #expect(task.occurrence(after: Fixture.date(29, 23), calendar: calendar) == Fixture.date(30, 9))
+        // Fri 30 -> skips the weekend -> Mon 2 Nov.
+        #expect(task.occurrence(after: Fixture.date(30, 9), calendar: calendar) == Fixture.date(2, 9, month: 11))
+    }
+
+    @Test func twiceADayOwesBothBeforeTheDayIsSatisfied() {
+        var task = NagTask(
+            title: "Stretch",
+            startAt: Fixture.date(28, 9),
+            repeatRule: .custom,
+            times: [NagTime(minute: 9 * 60), NagTime(minute: 21 * 60)],
+            now: Fixture.date(27, 20)
+        )
+        task.complete(at: Fixture.date(28, 9, 30), calendar: calendar)
+        #expect(task.startAt == Fixture.date(28, 21))
+        #expect(!task.isSatisfied(at: Fixture.date(28, 12), calendar: calendar))
+        task.complete(at: Fixture.date(28, 21, 10), calendar: calendar)
+        #expect(task.startAt == Fixture.date(29, 9))
+        #expect(task.isSatisfied(at: Fixture.date(28, 22), calendar: calendar))
+    }
+
+    @Test func completingLateSkipsMissedTimes() {
+        var task = meds(startAt: Fixture.date(28, 9))
+        // Done Friday at noon: Wed 9 AM, Thu 11 PM and Fri 9 AM are all behind us.
+        task.complete(at: Fixture.date(30, 12), calendar: calendar)
+        #expect(task.startAt == Fixture.date(2, 9, month: 11))
+    }
+
+    @Test func savingANewOrChangedScheduleMovesStartToTheNextTime() {
+        var task = meds(startAt: Fixture.date(1, 0))
+        task.alignStartToSchedule(previous: nil, now: Fixture.date(28, 10), calendar: calendar)
+        #expect(task.startAt == Fixture.date(29, 23))
+
+        // Unchanged times leave an overdue occurrence alone.
+        let saved = task
+        task.alignStartToSchedule(previous: saved, now: Fixture.date(30, 8), calendar: calendar)
+        #expect(task.startAt == Fixture.date(29, 23))
+
+        task.times.removeLast()
+        task.alignStartToSchedule(previous: saved, now: Fixture.date(30, 8), calendar: calendar)
+        #expect(task.startAt == Fixture.date(30, 9))
+    }
+
+    @Test func scheduleNeedsATimeAndADay() {
+        var task = meds()
+        #expect(task.hasValidSchedule)
+        task.times[0].weekdays = []
+        #expect(!task.hasValidSchedule)
+        task.times = []
+        #expect(!task.hasValidSchedule)
+        task.repeatRule = .daily
+        #expect(task.hasValidSchedule)
+    }
+
+    @Test func nagsSavedBeforeCustomTimesStillDecode() throws {
+        let task = NagTask(title: "Old", startAt: Fixture.date(28, 9), repeatRule: .daily, now: Fixture.date(27, 9))
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(task)) as! [String: Any]
+        json.removeValue(forKey: "times")
+        let decoded = try JSONDecoder().decode(NagTask.self, from: JSONSerialization.data(withJSONObject: json))
+        #expect(decoded == task)
+    }
 }
 
 struct EscalationTests {

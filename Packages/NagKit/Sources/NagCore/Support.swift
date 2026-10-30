@@ -143,3 +143,18 @@ extension LockSchedule {
         "\(NagFormat.timeOfDay(startMinute)) – \(NagFormat.timeOfDay(endMinute)), \(NagFormat.weekdays(weekdays))"
     }
 }
+
+extension NagTime {
+    /// "9:00 AM Mon, Wed, Fri".
+    public var label: String {
+        "\(NagFormat.timeOfDay(minute)) \(NagFormat.weekdays(weekdays))"
+    }
+}
+
+extension NagTask {
+    /// "Every day", or each custom time: "9:00 AM Mon, Wed, Fri · 11:00 PM Tue, Thu".
+    public var repeatLabel: String {
+        guard repeatRule == .custom, !times.isEmpty else { return repeatRule.label }
+        return times.sorted { $0.minute < $1.minute }.map(\.label).joined(separator: " · ")
+    }
+}

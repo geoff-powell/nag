@@ -4,7 +4,7 @@ import UIKit
 
 @MainActor
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    let model = AppModel(store: .shared)
+    let model = UITesting.isActive ? UITesting.makeModel() : AppModel(store: .shared)
     let router = Router()
 
     func application(

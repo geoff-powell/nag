@@ -20,9 +20,13 @@ final class AppModel {
     @ObservationIgnored private var changeObservation: SharedStore.ChangeObservation?
     @ObservationIgnored private var cloudSync: CloudTaskSync?
     @ObservationIgnored private var syncTask: Task<Void, Never>?
+    /// UI tests: no iCloud, and no shields, DeviceActivity schedules or notifications. On a real
+    /// iPhone those are shared with the user's real Nag, so a test run must not touch them.
+    @ObservationIgnored private let isolated: Bool
 
-    init(store: SharedStore) {
+    init(store: SharedStore, isolated: Bool = false) {
         self.store = store
+        self.isolated = isolated
         self.state = store.load()
         self.screenTimeStatus = AuthorizationCenter.shared.authorizationStatus
     }
@@ -32,6 +36,7 @@ final class AppModel {
         changeObservation = store.observeChanges { [weak self] in
             Task { @MainActor in self?.reload() }
         }
+        guard !isolated else { return }
         let cloud = CloudTaskSync(store: store) { [weak self] in
             Task { @MainActor in
                 self?.reload()
@@ -66,6 +71,7 @@ final class AppModel {
 
     /// Runs NagEngine after any earlier sync finishes, so syncs never overlap.
     func sync() {
+        guard !isolated else { return }
         let previous = syncTask
         let store = store
         syncTask = Task {
@@ -105,6 +111,11 @@ final class AppModel {
                 state.tasks.append(task)
             }
         }
+    }
+
+    func duplicateTask(_ id: UUID) {
+        guard let task = state.task(id) else { return }
+        saveTask(task.duplicate(now: .now))
     }
 
     func canDeleteTask(_ id: UUID) -> Bool {

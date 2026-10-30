@@ -8,17 +8,25 @@ struct NagRow: View {
     let onComplete: () -> Void
 
     @Environment(AppModel.self) private var model
+    /// The check was just tapped: show it filled while the completion lands.
+    @State private var checking = false
+    @State private var checkBounces = 0
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Button(action: onComplete) {
+            Button(action: tapCheck) {
                 Image(systemName: checkSymbol)
                     .font(.title2)
                     .foregroundStyle(checkColor)
+                    .contentTransition(.symbolEffect(.replace.magic(fallback: .replace.downUp.byLayer)))
+                    .symbolEffect(.bounce.up, options: .speed(1.4), value: checkBounces)
             }
             .buttonStyle(.plain)
-            .disabled(!task.canComplete(at: now, calendar: model.calendar))
+            .disabled(checking || !task.canComplete(at: now, calendar: model.calendar))
+            .sensoryFeedback(.success, trigger: checkBounces)
             .accessibilityLabel(needsScan ? "Scan to finish" : "Mark done")
+            .accessibilityIdentifier("complete.\(task.title)")
+            .accessibilityValue(checkState)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(task.title)
@@ -31,13 +39,21 @@ struct NagRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
-                Label(statusText, systemImage: statusSymbol)
-                    .font(.caption)
-                    .foregroundStyle(statusColor)
+                Label {
+                    Text(statusText)
+                        .contentTransition(.opacity)
+                } icon: {
+                    Image(systemName: statusSymbol)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .font(.caption)
+                .foregroundStyle(statusColor)
+                .accessibilityIdentifier("status.\(task.title)")
                 if task.isRepeating || needsScan {
                     tags
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("tags.\(task.title)")
                 }
             }
             Spacer(minLength: 0)
@@ -45,13 +61,38 @@ struct NagRow: View {
         .padding(.vertical, 2)
     }
 
+    /// Fills the check in place first, then completes, so the row only moves once the tap has landed.
+    private func tapCheck() {
+        guard !needsScan else {
+            onComplete()
+            return
+        }
+        withAnimation(Motion.quick) { checking = true }
+        checkBounces += 1
+        Task { @MainActor in
+            try? await Task.sleep(for: Motion.checkBeat)
+            onComplete()
+            checking = false
+        }
+    }
+
+    private var isDone: Bool {
+        checking || task.isFinished || task.isSatisfied(at: now, calendar: model.calendar)
+    }
+
+    private var checkState: String {
+        if task.isFinished || task.isSatisfied(at: now, calendar: model.calendar) { return "done" }
+        if task.isSnoozed(at: now) { return "snoozed" }
+        return task.isOutstanding(at: now) ? "due" : "upcoming"
+    }
+
     private var checkSymbol: String {
-        if task.isFinished || task.isSatisfied(at: now, calendar: model.calendar) { return "checkmark.circle.fill" }
+        if isDone { return "checkmark.circle.fill" }
         return needsScan ? "wave.3.right.circle" : "circle"
     }
 
     private var checkColor: Color {
-        if task.isFinished || task.isSatisfied(at: now, calendar: model.calendar) { return .green }
+        if isDone { return .green }
         return task.isOutstanding(at: now) ? .orange : .secondary
     }
 
@@ -75,7 +116,7 @@ struct NagRow: View {
 
     private var tags: Text {
         var parts: [Text] = []
-        if task.isRepeating { parts.append(Text("\(Image(systemName: "repeat")) \(task.repeatRule.label)")) }
+        if task.isRepeating { parts.append(Text("\(Image(systemName: "repeat")) \(task.repeatLabel)")) }
         if needsScan { parts.append(Text("\(Image(systemName: "wave.3.right")) Scan to finish")) }
         return parts.dropFirst().reduce(parts.first ?? Text("")) { Text("\($0)   \($1)") }
     }

@@ -6,6 +6,7 @@ struct TaskEditorView: View {
     @Environment(\.dismiss) private var dismiss
 
     private let isNew: Bool
+    private let original: NagTask?
     @State private var task: NagTask
     @State private var startNow: Bool
     @State private var limitSnoozes: Bool
@@ -13,6 +14,7 @@ struct TaskEditorView: View {
 
     init(task: NagTask?) {
         isNew = task == nil
+        original = task
         let initial = task ?? NagTask(title: "")
         _task = State(initialValue: initial)
         _startNow = State(initialValue: task == nil)
@@ -21,6 +23,8 @@ struct TaskEditorView: View {
 
     static let intervals = [1, 2, 5, 10, 15, 30, 60]
     static let snoozeLengths = [5, 10, 15, 30, 60]
+
+    private var isCustom: Bool { task.repeatRule == .custom }
 
     var body: some View {
         NavigationStack {
@@ -33,13 +37,20 @@ struct TaskEditorView: View {
                 }
 
                 Section("When") {
-                    Toggle("Start nagging now", isOn: $startNow)
-                    if !startNow {
-                        DatePicker("Starts", selection: $task.startAt)
+                    if !isCustom {
+                        Toggle("Start nagging now", isOn: $startNow.animation(Motion.quick))
+                        if !startNow {
+                            DatePicker("Starts", selection: $task.startAt)
+                        }
                     }
-                    Picker("Repeat", selection: $task.repeatRule) {
+                    Picker("Repeat", selection: $task.repeatRule.animation(Motion.list)) {
                         ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
+                    .accessibilityIdentifier("repeat")
+                }
+
+                if isCustom {
+                    timesSection
                 }
 
                 Section {
@@ -60,7 +71,7 @@ struct TaskEditorView: View {
                     Picker("Snooze for", selection: $task.style.snoozeMinutes) {
                         ForEach(Self.snoozeLengths, id: \.self) { Text(NagFormat.minutes($0)).tag($0) }
                     }
-                    Toggle("Limit snoozes", isOn: $limitSnoozes)
+                    Toggle("Limit snoozes", isOn: $limitSnoozes.animation(Motion.quick))
                     if limitSnoozes {
                         Stepper(
                             "\(task.style.maxSnoozes ?? 3) per occurrence",
@@ -108,7 +119,12 @@ struct TaskEditorView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
-                        .disabled(task.title.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(task.title.trimmingCharacters(in: .whitespaces).isEmpty || !task.hasValidSchedule)
+                }
+            }
+            .onChange(of: task.repeatRule) { _, rule in
+                if rule == .custom, task.times.isEmpty {
+                    task.times = [NagTime(minute: minuteOfDay(task.startAt))]
                 }
             }
             .confirmationDialog("Delete this nag?", isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -127,8 +143,55 @@ struct TaskEditorView: View {
         )
     }
 
+    private var timesSection: some View {
+        Section {
+            ForEach($task.times) { $time in
+                VStack(alignment: .leading, spacing: 10) {
+                    DatePicker("Time", selection: minuteBinding($time.minute), displayedComponents: .hourAndMinute)
+                    WeekdayPicker(selection: $time.weekdays)
+                }
+                .padding(.vertical, 4)
+            }
+            .onDelete { offsets in
+                withAnimation(Motion.list) { task.times.remove(atOffsets: offsets) }
+            }
+            Button("Add time", systemImage: "plus") {
+                withAnimation(Motion.list) {
+                    task.times.append(NagTime(minute: task.times.last.map { ($0.minute + 60) % 1440 } ?? 9 * 60))
+                }
+            }
+        } header: {
+            Text("Times")
+        } footer: {
+            Group {
+                if !task.hasValidSchedule {
+                    Text("Add at least one time, and pick at least one day for each.")
+                        .foregroundStyle(.red)
+                } else {
+                    Text("Nags at each time on its days. Swipe a time to remove it.")
+                }
+            }
+            .animation(Motion.quick, value: task.hasValidSchedule)
+        }
+    }
+
+    private func minuteOfDay(_ date: Date) -> Int {
+        let parts = model.calendar.dateComponents([.hour, .minute], from: date)
+        return (parts.hour ?? 9) * 60 + (parts.minute ?? 0)
+    }
+
+    private func minuteBinding(_ minute: Binding<Int>) -> Binding<Date> {
+        Binding(
+            get: {
+                model.calendar.date(bySettingHour: minute.wrappedValue / 60, minute: minute.wrappedValue % 60, second: 0, of: .now) ?? .now
+            },
+            set: { minute.wrappedValue = minuteOfDay($0) }
+        )
+    }
+
     private func save() {
-        if startNow && isNew { task.startAt = .now }
+        if startNow && isNew && !isCustom { task.startAt = .now }
+        task.alignStartToSchedule(previous: original, now: .now, calendar: model.calendar)
         if !limitSnoozes { task.style.maxSnoozes = nil }
         model.saveTask(task)
         dismiss()

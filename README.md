@@ -41,6 +41,17 @@ cd Packages/NagKit && swift test
 The scheduling, escalation, quiet hours, unlock and sync rules all live in `NagCore` and are covered
 there. The Tests workflow runs them and builds both apps on every push to `main`.
 
+`NagUITests` drives the iPhone app end to end in the simulator: creating, editing, completing,
+snoozing, reopening, duplicating and deleting nags. The app launches with a seeded throwaway store
+(see `Nag/App/UITesting.swift`), so the tests never touch your real nags or iCloud.
+
+```sh
+xcodebuild test -scheme Nag -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+```
+
+To review animations, `scripts/record-ui.sh` records each UI test as an MP4 (60 fps, for frame-by-frame
+review) and a GIF in `build/ui-recordings`. Pass test names to record only those.
+
 ## Releasing
 
 ### iPhone: TestFlight
