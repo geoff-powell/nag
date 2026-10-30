@@ -5,10 +5,15 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
     @State private var screenTimeError: String?
+    @State private var showVersion = false
+    @State private var titleScrolledAway = false
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {} header: { title }
+                    .listSectionSpacing(.compact)
+
                 Section {
                     LabeledContent("Notifications", value: notificationLabel)
                     if model.notificationStatus == .notDetermined {
@@ -68,8 +73,61 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            // The large title is drawn in the form instead (see `title`), because the system one can't take
+            // gestures. The inline title fades in once it scrolls away, like the system large title.
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Settings")
+                        .font(.headline)
+                        .opacity(titleScrolledAway ? 1 : 0)
+                        .accessibilityHidden(!titleScrolledAway)
+                }
+            }
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top > 40
+            } action: { _, scrolledAway in
+                withAnimation(.easeInOut(duration: 0.2)) { titleScrolledAway = scrolledAway }
+            }
             .task { await model.refreshPermissions() }
         }
+    }
+
+    /// Looks like a large navigation title. Long-press it to show the app version underneath.
+    private var title: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Settings")
+                .font(.largeTitle.bold())
+                .foregroundStyle(Color.primary)
+            if showVersion {
+                Text(versionLabel)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.secondary)
+                    .transition(.opacity)
+            }
+        }
+        .textCase(nil)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Line up with where the system large title would sit.
+        .padding(.leading, -16)
+        .padding(.top, -18)
+        .contentShape(Rectangle())
+        .onLongPressGesture {
+            withAnimation { showVersion.toggle() }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityAction(named: showVersion ? "Hide version" : "Show version") {
+            withAnimation { showVersion.toggle() }
+        }
+        .accessibilityIdentifier("settings.title")
+    }
+
+    private var versionLabel: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "Version \(version) (\(build))"
     }
 
     private var notificationLabel: String {
