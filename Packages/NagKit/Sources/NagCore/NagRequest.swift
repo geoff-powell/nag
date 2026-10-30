@@ -106,7 +106,7 @@ extension NagState {
 
         let source = request.source.nonBlank
         let externalID = request.externalID.nonBlank
-        let original = externalID.flatMap { task(source: source, externalID: $0) }
+        let original = externalID.flatMap { self.task(source: source, externalID: $0) }
         var task = original ?? NagTask(
             title: title,
             startAt: request.startAt ?? now,
@@ -144,7 +144,7 @@ extension NagState {
     /// Sending an unchanged item again changes nothing.
     @discardableResult
     public mutating func apply(_ request: NagRequest, now: Date, calendar: Calendar) throws(NagRequestError) -> NagDraft {
-        let draft = try draft(for: request, now: now, calendar: calendar)
+        let draft = try self.draft(for: request, now: now, calendar: calendar)
         if let original = draft.original, draft.task == original { return draft }
         return NagDraft(task: save(draft.task, now: now), original: draft.original)
     }
