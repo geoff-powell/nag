@@ -7,11 +7,13 @@ struct MacNagsView: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
-            let groups = MacNagGroups(tasks: model.state.tasks, now: context.date, calendar: model.calendar)
+            // The tick's date can be up to 30s old when a change re-renders the list.
+            let now = max(context.date, .now)
+            let groups = MacNagGroups(tasks: model.state.tasks, now: now, calendar: model.calendar)
             List {
-                section("Now", groups.now, now: context.date)
-                section("Coming up", groups.later, now: context.date)
-                section("Done", groups.done, now: context.date)
+                section("Now", groups.now, now: now)
+                section("Coming up", groups.later, now: now)
+                section("Done", groups.done, now: now)
             }
             .overlay {
                 if model.state.tasks.isEmpty {
@@ -27,7 +29,7 @@ struct MacNagsView: View {
             }
             // Rows slide between sections however they change: here, the menu bar, a notification or the iPhone.
             .animation(.snappy(duration: 0.32), value: [groups.now, groups.later, groups.done].map { section in
-                section.map { "\($0.id)|\($0.isSnoozed(at: context.date))|\($0.isFinished)" }
+                section.map { "\($0.id)|\($0.isSnoozed(at: now))|\($0.isFinished)" }
             })
         }
         .navigationTitle("Nags")
@@ -111,6 +113,9 @@ private struct MacNagRow: View {
             if task.isRepeating {
                 Image(systemName: "repeat").foregroundStyle(.secondary).help(task.repeatLabel)
             }
+            if let source = task.source {
+                Image(systemName: "arrow.down.app").foregroundStyle(.secondary).help("From \(source)")
+            }
             if task.canSnooze(at: now) {
                 Button("Snooze") { model.snooze(task.id) }.controlSize(.small)
             }
@@ -120,6 +125,9 @@ private struct MacNagRow: View {
         .onTapGesture(count: 2, perform: onEdit)
         .contextMenu {
             Button("Edit…", action: onEdit)
+            if let link = task.link {
+                Link("Open original", destination: link)
+            }
             Button("Duplicate") { model.duplicateTask(task.id) }
             if task.canSnooze(at: now) { Button("Snooze") { model.snooze(task.id) } }
             Divider()
@@ -157,12 +165,20 @@ struct MacTaskEditor: View {
     @State private var limitSnoozes: Bool
 
     init(task: NagTask?) {
-        isNew = task == nil
-        original = task
-        let initial = task ?? NagTask(title: "")
-        _task = State(initialValue: initial)
-        _startNow = State(initialValue: task == nil)
-        _limitSnoozes = State(initialValue: initial.style.maxSnoozes != nil)
+        self.init(task: task ?? NagTask(title: ""), original: task, startNow: task == nil)
+    }
+
+    /// Reviews a nag from a link before saving it.
+    init(draft: NagDraft) {
+        self.init(task: draft.task, original: draft.original, startNow: false)
+    }
+
+    private init(task: NagTask, original: NagTask?, startNow: Bool) {
+        isNew = original == nil
+        self.original = original
+        _task = State(initialValue: task)
+        _startNow = State(initialValue: startNow)
+        _limitSnoozes = State(initialValue: task.style.maxSnoozes != nil)
     }
 
     private var isCustom: Bool { task.repeatRule == .custom }
@@ -174,6 +190,16 @@ struct MacTaskEditor: View {
                     TextField("What needs doing?", text: $task.title)
                     TextField("Notes, or the first tiny step", text: $task.notes, axis: .vertical)
                         .lineLimit(1...4)
+                }
+                if task.source != nil || task.link != nil {
+                    Section {
+                        if let source = task.source {
+                            LabeledContent("From", value: source)
+                        }
+                        if let link = task.link {
+                            Link("Open original", destination: link)
+                        }
+                    }
                 }
                 Section("When") {
                     if !isCustom {

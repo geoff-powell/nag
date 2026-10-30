@@ -118,6 +118,13 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
     public var snoozedUntil: Date?
     /// Snoozes used on the current occurrence.
     public var snoozeCount: Int
+    /// What made this nag outside Nag, such as "Calendar", "Muse" or "Claude". `nil` for nags made in Nag.
+    public var source: String?
+    /// The source's own ID for the item, so sending the same item again updates this nag instead of
+    /// adding another.
+    public var externalID: String?
+    /// Opens the item the nag came from: a note, an event, a Muse board.
+    public var link: URL?
 
     public init(
         id: UUID = UUID(),
@@ -128,6 +135,9 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         times: [NagTime] = [],
         style: NagStyle = NagStyle(),
         proof: CompletionProof = .none,
+        source: String? = nil,
+        externalID: String? = nil,
+        link: URL? = nil,
         now: Date = .now
     ) {
         self.id = id
@@ -144,14 +154,18 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         self.lastCompletedAt = nil
         self.snoozedUntil = nil
         self.snoozeCount = 0
+        self.source = source
+        self.externalID = externalID
+        self.link = link
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, title, notes, createdAt, updatedAt, startAt, repeatRule, times, style, proof
         case completedAt, lastCompletedAt, snoozedUntil, snoozeCount
+        case source, externalID, link
     }
 
-    /// `times` is optional so nags saved before custom schedules existed still load.
+    /// `times`, `source`, `externalID` and `link` are optional so nags saved by older versions still load.
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
@@ -168,6 +182,9 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         lastCompletedAt = try c.decodeIfPresent(Date.self, forKey: .lastCompletedAt)
         snoozedUntil = try c.decodeIfPresent(Date.self, forKey: .snoozedUntil)
         snoozeCount = try c.decode(Int.self, forKey: .snoozeCount)
+        source = try c.decodeIfPresent(String.self, forKey: .source)
+        externalID = try c.decodeIfPresent(String.self, forKey: .externalID)
+        link = try c.decodeIfPresent(URL.self, forKey: .link)
     }
 }
 

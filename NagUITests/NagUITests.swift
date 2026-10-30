@@ -196,6 +196,33 @@ final class NagUITests: XCTestCase {
         pause()
     }
 
+    // MARK: - Links
+
+    func testLinkOpensAPrefilledEditorAndSavesWithItsSource() throws {
+        launch()
+        app.open(try XCTUnwrap(URL(string: "nag://add?title=Reply+to+Sam&notes=From+my+notes&source=Muse&id=card-1")))
+
+        let title = app.textFields["What needs doing?"]
+        XCTAssertTrue(title.waitForExistence(timeout: 10))
+        XCTAssertEqual(title.value as? String, "Reply to Sam")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Muse'")).firstMatch.exists)
+        pause()
+        app.buttons["Save"].tap()
+
+        let tags = app.staticTexts["tags.Reply to Sam"]
+        XCTAssertTrue(tags.waitForExistence(timeout: 3))
+        XCTAssertTrue(tags.label.contains("Muse"), tags.label)
+        pause()
+    }
+
+    func testBadLinkExplainsWhatsWrong() throws {
+        launch()
+        app.open(try XCTUnwrap(URL(string: "nag://add?title=Oops&repeat=hourly")))
+        XCTAssertTrue(app.alerts["Couldn't add that nag"].waitForExistence(timeout: 10))
+        app.alerts.buttons["OK"].tap()
+        XCTAssertFalse(app.staticTexts["Oops"].exists)
+    }
+
     // MARK: - Helpers
 
     private func launch(scenario: String = "sample") {

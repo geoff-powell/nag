@@ -80,6 +80,7 @@
 		AA0000000000000000000036 /* NagShieldAction-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "NagShieldAction-Info.plist"; sourceTree = "<group>"; };
 		AA0000000000000000000037 /* Extension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Extension.entitlements"; sourceTree = "<group>"; };
 		AA0000000000000000000038 /* NagMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "NagMac.entitlements"; sourceTree = "<group>"; };
+		AA0000000000000000000039 /* NagMac-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "NagMac-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -192,6 +193,7 @@
 				AA0000000000000000000036 /* NagShieldAction-Info.plist */,
 				AA0000000000000000000037 /* Extension.entitlements */,
 				AA0000000000000000000038 /* NagMac.entitlements */,
+				AA0000000000000000000039 /* NagMac-Info.plist */,
 			);
 			path = Config;
 			sourceTree = "<group>";
@@ -801,6 +803,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/NagMac-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Nag;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
@@ -829,6 +832,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/NagMac-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Nag;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;

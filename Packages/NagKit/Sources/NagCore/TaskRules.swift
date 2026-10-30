@@ -62,7 +62,8 @@ extension Calendar {
 extension NagTask {
     public var isRepeating: Bool { repeatRule != .never }
 
-    /// A fresh copy with the same settings and schedule, but none of this nag's progress.
+    /// A fresh copy with the same settings and schedule, but none of this nag's progress. The copy keeps
+    /// the source and link but not the external ID, so the source can't update it.
     public func duplicate(now: Date) -> NagTask {
         NagTask(
             title: "\(title) copy",
@@ -72,6 +73,8 @@ extension NagTask {
             times: times.map { NagTime(minute: $0.minute, weekdays: $0.weekdays) },
             style: style,
             proof: proof,
+            source: source,
+            link: link,
             now: now
         )
     }

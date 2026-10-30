@@ -13,12 +13,20 @@ struct TaskEditorView: View {
     @State private var confirmDelete = false
 
     init(task: NagTask?) {
-        isNew = task == nil
-        original = task
-        let initial = task ?? NagTask(title: "")
-        _task = State(initialValue: initial)
-        _startNow = State(initialValue: task == nil)
-        _limitSnoozes = State(initialValue: initial.style.maxSnoozes != nil)
+        self.init(task: task ?? NagTask(title: ""), original: task, startNow: task == nil)
+    }
+
+    /// Reviews a nag from a link before saving it.
+    init(draft: NagDraft) {
+        self.init(task: draft.task, original: draft.original, startNow: false)
+    }
+
+    private init(task: NagTask, original: NagTask?, startNow: Bool) {
+        isNew = original == nil
+        self.original = original
+        _task = State(initialValue: task)
+        _startNow = State(initialValue: startNow)
+        _limitSnoozes = State(initialValue: task.style.maxSnoozes != nil)
     }
 
     static let intervals = [1, 2, 5, 10, 15, 30, 60]
@@ -34,6 +42,17 @@ struct TaskEditorView: View {
                         .font(.headline)
                     TextField("Notes, or the first tiny step", text: $task.notes, axis: .vertical)
                         .lineLimit(1...4)
+                }
+
+                if task.source != nil || task.link != nil {
+                    Section {
+                        if let source = task.source {
+                            LabeledContent("From", value: source)
+                        }
+                        if let link = task.link {
+                            Link("Open original", destination: link)
+                        }
+                    }
                 }
 
                 Section("When") {

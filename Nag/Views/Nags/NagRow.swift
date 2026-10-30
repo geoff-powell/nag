@@ -49,7 +49,7 @@ struct NagRow: View {
                 .font(.caption)
                 .foregroundStyle(statusColor)
                 .accessibilityIdentifier("status.\(task.title)")
-                if task.isRepeating || needsScan {
+                if task.isRepeating || needsScan || task.source != nil {
                     tags
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -118,6 +118,7 @@ struct NagRow: View {
         var parts: [Text] = []
         if task.isRepeating { parts.append(Text("\(Image(systemName: "repeat")) \(task.repeatLabel)")) }
         if needsScan { parts.append(Text("\(Image(systemName: "wave.3.right")) Scan to finish")) }
+        if let source = task.source { parts.append(Text("\(Image(systemName: "arrow.down.app")) \(source)")) }
         return parts.dropFirst().reduce(parts.first ?? Text("")) { Text("\($0)   \($1)") }
     }
 

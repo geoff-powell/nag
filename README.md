@@ -204,6 +204,47 @@ hash is stored. Nag can print a fresh QR code for you, or use any barcode you al
 (app selections and NFC tags don't carry across). Edits merge last-writer-wins, except that a
 completion is never lost to an older edit from the other device.
 
+## Adding nags from other apps
+
+Other apps can hand Nag a nag in two ways. Both record a **source** (shown on the nag) and, optionally,
+the source's **ID** for the item. Sending the same source and ID again updates that nag instead of
+adding a duplicate, and a finished one-off nag that's been moved (a rescheduled event, say) nags again.
+
+**Shortcuts and Siri.** The *Create Nag* action takes a title, notes, start, repeat, interval, source,
+source ID and link, and adds the nag straight away. That's the bridge to most other apps:
+
+- Calendar: a Shortcuts automation that runs *Find Calendar Events*, then *Create Nag* for each, with
+  something stable about the event (its title, say) as the source ID.
+- Notes, Safari and anything with a share sheet: a shortcut that shows in the share sheet and passes
+  the shared text to *Create Nag*.
+- AI assistants: Siri and Apple Intelligence can run the action. On the Mac, an assistant that can run
+  shell commands can use `shortcuts run "<your Create Nag shortcut>"`.
+
+**`nag://add` links.** Anything that can open a URL: a link in Notes, a Calendar event's URL field, a
+Muse card, a script or an AI assistant. A link opens the editor filled in, so nothing is added until
+you tap Save.
+
+```
+nag://add?title=Reply+to+Sam&at=2026-10-30T09:00&repeat=weekdays&source=Muse&id=card-42&link=https%3A%2F%2F…
+```
+
+| Parameter | Meaning |
+|---|---|
+| `title` | Required. What to do. |
+| `notes` | Extra detail. |
+| `at` | When nagging starts: ISO 8601 (`2026-10-30T09:00:00Z`), local (`2026-10-30T09:00`), a date (9 AM) or a time (`17:30`, next time it comes round). |
+| `in` | Start after a delay: `30m`, `2h`, `1h30m`, `1d`. Ignored when `at` is set. |
+| `repeat` | `once`, `daily`, `weekdays`, `weekly` or `custom`. |
+| `times`, `days` | A custom schedule: `times=09:00,21:00&days=mon,wed,fri` (`days` also takes `weekdays`, `weekends`, `daily`). |
+| `every` | Minutes between nags. |
+| `escalation` | `steady`, `gentle` or `relentless`. |
+| `snooze`, `snoozes` | Snooze length in minutes, and how many per occurrence (or `unlimited`). |
+| `focus` | `true` or `false`: break through Focus. |
+| `source`, `id` | Who sent it, and their ID for the item. |
+| `link` | A URL that opens the original item, shown on the nag. |
+
+The parsing and update rules live in NagCore (`NagRequest`, `NagLink`) and are unit tested.
+
 ## Honest limits
 
 Nag makes avoiding things harder, not impossible. That's deliberate: it's a tool you set up for
@@ -220,3 +261,5 @@ yourself.
 - If Screen Time access isn't granted and quiet hours are on, Nag uses one-off notifications only, so
   it never nags at night without a way to stop.
 - Walk and key-scan requirements can only be met on the iPhone.
+- A nag you delete comes back if its source sends the same item again, for example on the next run
+  of a Shortcuts automation.

@@ -97,20 +97,28 @@ final class AppModel {
     }
 
     func saveTask(_ task: NagTask) {
-        var task = task
-        task.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        task.updatedAt = .now
+        update { $0.save(task, now: .now) }
+    }
+
+    /// Adds a nag from Shortcuts or Siri, or updates the one made earlier from the same source item.
+    @discardableResult
+    func apply(_ request: NagRequest) throws(NagRequestError) -> NagDraft {
+        var result: Result<NagDraft, NagRequestError> = .failure(.missingTitle)
+        let calendar = calendar
         update { state in
-            if let index = state.tasks.firstIndex(where: { $0.id == task.id }) {
-                if state.tasks[index].startAt != task.startAt {
-                    task.snoozedUntil = nil
-                    task.snoozeCount = 0
-                }
-                state.tasks[index] = task
-            } else {
-                state.tasks.append(task)
+            do throws(NagRequestError) {
+                result = .success(try state.apply(request, now: .now, calendar: calendar))
+            } catch {
+                result = .failure(error)
             }
         }
+        return try result.get()
+    }
+
+    /// What a `nag://add` link would save, for the editor to show before anything changes.
+    func draft(for request: NagRequest) throws(NagRequestError) -> NagDraft {
+        reload()
+        return try state.draft(for: request, now: .now, calendar: calendar)
     }
 
     func duplicateTask(_ id: UUID) {

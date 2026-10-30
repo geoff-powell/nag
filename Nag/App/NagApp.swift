@@ -12,6 +12,9 @@ struct NagApp: App {
             RootView()
                 .environment(appDelegate.model)
                 .environment(appDelegate.router)
+                .onOpenURL { url in
+                    appDelegate.router.open(url, model: appDelegate.model)
+                }
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
