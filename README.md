@@ -39,7 +39,7 @@ cd Packages/NagKit && swift test
 ```
 
 The scheduling, escalation, quiet hours, unlock and sync rules all live in `NagCore` and are covered
-there. The Tests workflow runs them and builds both apps on every push to `main`.
+there, and the MCP server in `NagMCP` is tested down to a real HTTP round trip. The Tests workflow runs them and builds both apps on every push to `main`.
 
 `NagUITests` drives the iPhone app end to end in the simulator: creating, editing, completing,
 snoozing, reopening, duplicating and deleting nags. The app launches with a seeded throwaway store
@@ -170,6 +170,8 @@ Mac deploys don't.
 Packages/NagKit
   NagCore    Plain Swift: models, nag planning, lock rules, unlock requirements,
              shared JSON store, iCloud merge. Fully unit tested.
+  NagMCP     MCP server for AI assistants: protocol, tools, stdio and HTTP
+             transports. Used by the Mac app. Unit tested.
   NagKit     Apple frameworks: notifications, iCloud sync, and on iOS the
              Screen Time glue (shields, DeviceActivity schedules, NagEngine).
 Nag/              iPhone app (SwiftUI)
@@ -244,6 +246,44 @@ nag://add?title=Reply+to+Sam&at=2026-10-30T09:00&repeat=weekdays&source=Muse&id=
 | `link` | A URL that opens the original item, shown on the nag. |
 
 The parsing and update rules live in NagCore (`NagRequest`, `NagLink`) and are unit tested.
+
+## AI assistants (MCP)
+
+The Mac app is also a [Model Context Protocol](https://modelcontextprotocol.io) server. It offers four
+tools:
+
+| Tool | Does |
+|---|---|
+| `create_nag` | Adds a nag, or updates the one with the same `source` and `external_id`. Takes the same options as `nag://add`. `source` defaults to the client's name. |
+| `list_nags` | Lists nags by status: `open` (default), `due`, `upcoming`, `done` or `all`. |
+| `complete_nag` | Marks a nag done, by `id` or `external_id`. Nags that need a key scan can only be finished on the iPhone. |
+| `snooze_nag` | Snoozes a due nag, if it has snoozes left. |
+
+Nags made this way sync to the iPhone like any other nag.
+
+**Apps on this Mac** (Claude Desktop, Claude Code, Cursor, VS Code) run Nag as a stdio server. Settings >
+AI assistants has buttons that copy the config, which looks like this:
+
+```json
+{ "mcpServers": { "nag": { "command": "/Applications/Nag.app/Contents/MacOS/Nag", "args": ["--mcp"] } } }
+```
+
+`Nag --mcp` works on the same store as the menu bar app and opens it in the background if it isn't
+running, since the app is what does the nagging.
+
+**Over HTTP**, for clients on other machines or ones that only speak HTTP, turn on *Serve over HTTP* in
+Settings. It serves MCP's Streamable HTTP transport at `http://127.0.0.1:4747/mcp` (the port can be
+changed), or on the network when *Allow other devices on the network* is on. Every request needs
+`Authorization: Bearer <token>`, using the token from Settings. Requests from web pages are refused.
+For Claude Code:
+
+```sh
+claude mcp add --scope user --transport http nag http://127.0.0.1:4747/mcp --header "Authorization: Bearer <token>"
+```
+
+The server speaks plain HTTP. On a network you don't trust, or to reach it from the internet (such as a
+claude.ai connector), put it behind an HTTPS tunnel. Clients that only support OAuth can't use the bearer
+token.
 
 ## Honest limits
 

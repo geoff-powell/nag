@@ -6,10 +6,12 @@ import SwiftUI
 @MainActor
 final class MainWindowController: NSObject, NSWindowDelegate {
     private let model: MacModel
+    private let mcp: MCPController
     private var window: NSWindow?
 
-    init(model: MacModel) {
+    init(model: MacModel, mcp: MCPController) {
         self.model = model
+        self.mcp = mcp
     }
 
     func show() {
@@ -21,7 +23,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     }
 
     private func makeWindow() -> NSWindow {
-        let window = NSWindow(contentViewController: NSHostingController(rootView: MainView().environment(model)))
+        let window = NSWindow(contentViewController: NSHostingController(rootView: MainView().environment(model).environment(mcp)))
         window.title = "Nag"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.setContentSize(NSSize(width: 860, height: 600))

@@ -39,7 +39,17 @@ extension NagRequest {
         for item in components.percentEncodedQueryItems ?? [] {
             // Forms encode spaces as "+", so a literal plus arrives as %2B.
             let value = item.value?.replacingOccurrences(of: "+", with: " ").removingPercentEncoding ?? ""
-            query[item.name.lowercased()] = value
+            query[item.name] = value
+        }
+        try self.init(parameters: query, now: now, calendar: calendar)
+    }
+
+    /// Reads the same parameters as a `nag://add` link, from any source of names and text values, such as
+    /// an MCP tool call. Names are case insensitive. List values are comma separated.
+    public init(parameters: [String: String], now: Date, calendar: Calendar) throws(NagRequestError) {
+        var query: [String: String] = [:]
+        for (name, value) in parameters {
+            query[name.lowercased()] = value
         }
         func value(_ names: String...) -> String? {
             names.lazy.compactMap { query[$0].nonBlank }.first

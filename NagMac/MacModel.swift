@@ -55,7 +55,7 @@ final class MacModel {
 
     func start() {
         changeObservation = store.observeChanges { [weak self] in
-            Task { @MainActor in self?.reload() }
+            Task { @MainActor in self?.storeChanged() }
         }
         let cloud = CloudTaskSync(store: store) { [weak self] in
             Task { @MainActor in
@@ -100,6 +100,20 @@ final class MacModel {
     func reload() {
         state = store.load()
         onChange?()
+    }
+
+    /// The store changed. Nag's own changes are already in `state`; anything else came from outside, such
+    /// as the `--mcp` server or the HTTP MCP server, so it gets the same follow-up as a change made here.
+    private func storeChanged() {
+        let latest = store.load()
+        guard latest != state else { return }
+        let nagsChanged = latest.tasks != state.tasks
+        state = latest
+        onChange?()
+        if nagsChanged {
+            cloudSync?.reconcile()
+            syncNotifications()
+        }
     }
 
     func update(_ change: (inout NagState) -> Void) {

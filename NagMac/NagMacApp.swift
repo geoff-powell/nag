@@ -1,7 +1,7 @@
 import NagKit
 import SwiftUI
 
-@main
+/// The menu bar app. Started by `NagMacMain` unless Nag was launched as an MCP server.
 struct NagMacApp: App {
     @NSApplicationDelegateAdaptor(MacAppDelegate.self) private var appDelegate
 
