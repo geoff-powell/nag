@@ -8,7 +8,8 @@ import NagKit
 @MainActor
 final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     let model = MacModel(store: .shared)
-    private lazy var mainWindow = MainWindowController(model: model)
+    let mcp = MCPController()
+    private lazy var mainWindow = MainWindowController(model: model, mcp: mcp)
     private lazy var shieldPanel = ShieldPanelController()
     private lazy var nagPanel = NagPanelController(model: model)
     private lazy var blocker = AppBlocker { [weak self] app, profile in
@@ -40,6 +41,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
         model.openMainWindow = { [weak self] in self?.mainWindow.show() }
         model.onChange = { [weak self] in self?.enforce() }
         model.start()
+        mcp.start()
 
         if !model.hasLaunchedBefore {
             model.markLaunched()

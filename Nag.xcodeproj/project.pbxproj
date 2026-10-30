@@ -12,6 +12,7 @@
 		AA0000000000000000000072 /* NagKit in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000082 /* NagKit */; };
 		AA0000000000000000000073 /* NagKit in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000083 /* NagKit */; };
 		AA0000000000000000000074 /* NagKit in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000084 /* NagKit */; };
+		AA0000000000000000000079 /* NagMCP in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000089 /* NagMCP */; };
 		AA0000000000000000000075 /* NagMonitor.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000011 /* NagMonitor.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AA0000000000000000000076 /* NagShieldConfig.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000012 /* NagShieldConfig.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AA0000000000000000000077 /* NagShieldAction.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000013 /* NagShieldAction.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -154,6 +155,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA0000000000000000000074 /* NagKit in Frameworks */,
+				AA0000000000000000000079 /* NagMCP in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -328,6 +330,7 @@
 			name = NagMac;
 			packageProductDependencies = (
 				AA0000000000000000000084 /* NagKit */,
+				AA0000000000000000000089 /* NagMCP */,
 			);
 			productName = NagMac;
 			productReference = AA0000000000000000000014 /* Nag.app */;
@@ -949,6 +952,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AA0000000000000000000090 /* XCLocalSwiftPackageReference "Packages/NagKit" */;
 			productName = NagKit;
+		};
+		AA0000000000000000000089 /* NagMCP */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA0000000000000000000090 /* XCLocalSwiftPackageReference "Packages/NagKit" */;
+			productName = NagMCP;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

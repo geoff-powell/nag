@@ -67,6 +67,8 @@ struct MacSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            MCPSettingsSection()
+
             Section {
                 Label("Nags sync with Nag on your iPhone through iCloud. Locks and settings stay on each device.", systemImage: "icloud")
                     .foregroundStyle(.secondary)
