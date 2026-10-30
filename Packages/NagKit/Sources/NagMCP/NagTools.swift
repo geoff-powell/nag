@@ -255,7 +255,7 @@ public struct NagTools: Sendable {
         summary: (NagTask) -> String
     ) -> JSONValue {
         let outcome: Result<NagTask, ToolFailure> = store.update { state in
-            guard let index = index(of: arguments, in: state, clientName: clientName) else {
+            guard let index = self.index(of: arguments, in: state, clientName: clientName) else {
                 return .failure(ToolFailure(message: "No nag matches. Use list_nags to find its id."))
             }
             var task = state.tasks[index]

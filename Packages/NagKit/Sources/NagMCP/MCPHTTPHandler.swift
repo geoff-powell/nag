@@ -51,7 +51,7 @@ public final class MCPHTTPHandler: @unchecked Sendable {
         var clientName: String?
         if let sessionID {
             // An unknown session (say, from before Nag restarted) tells the client to initialize again.
-            guard let session = session(sessionID) else { return .text(404, "Unknown session. Initialize again.") }
+            guard let session = self.session(sessionID) else { return .text(404, "Unknown session. Initialize again.") }
             clientName = session.clientName
         }
         let reply = server.handle(request.body, clientName: clientName)
