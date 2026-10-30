@@ -110,7 +110,12 @@ public struct NagPlanner: Sendable {
         self.calendar = calendar
     }
 
-    public func plan(tasks: [NagTask], quietHours: QuietHours, now: Date) -> NagPlan {
+    public func plan(
+        tasks: [NagTask],
+        quietHours: QuietHours,
+        tone: NagTone = .standard,
+        now: Date
+    ) -> NagPlan {
         var repeating: [PlannedNotification] = []
         var oneOffs: [(date: Date, notification: PlannedNotification)] = []
         var wake: Date?
@@ -123,11 +128,14 @@ public struct NagPlanner: Sendable {
 
         for task in tasks {
             guard let start = task.nagStart else { continue }
+            let effectiveTone = task.style.tone ?? tone
             let base = TimeInterval(max(1, task.style.intervalMinutes) * 60)
             let checkIn = task.isStarted(at: now)
             if checkIn, let workingUntil = task.workingUntil() { considerWake(workingUntil) }
             let category = NagID.Category.forTask(task, canSnooze: (task.snoozesLeft ?? 1) > 0)
-            let contentKey = StableHash.hex("\(task.title)|\(task.notes)|\(category)|\(task.style.breakThroughFocus)|\(checkIn)")
+            let contentKey = StableHash.hex(
+                "\(task.title)|\(task.notes)|\(category)|\(task.style.breakThroughFocus)|\(effectiveTone.rawValue)|\(checkIn)"
+            )
             let prefix = "\(NagID.nagNotificationPrefix)\(task.id.uuidString)|"
 
             if start <= now, allowRepeating, !quietNow {
@@ -141,8 +149,8 @@ public struct NagPlanner: Sendable {
                     trigger: .every(seconds: seconds),
                     title: task.title,
                     body: checkIn
-                        ? NagMessages.checkInRepeatingBody(title: task.title)
-                        : NagMessages.repeatingBody(title: task.title, tier: tier),
+                        ? NagMessages.checkInRepeatingBody(title: task.title, tone: effectiveTone)
+                        : NagMessages.repeatingBody(title: task.title, tier: tier, tone: effectiveTone),
                     category: category,
                     timeSensitive: task.style.breakThroughFocus
                 ))
@@ -164,8 +172,19 @@ public struct NagPlanner: Sendable {
                     trigger: .at(date),
                     title: task.title,
                     body: checkIn
-                        ? NagMessages.checkInBody(title: task.title, number: number, working: date.timeIntervalSince(start))
-                        : NagMessages.body(title: task.title, notes: task.notes, number: number, overdue: overdue),
+                        ? NagMessages.checkInBody(
+                            title: task.title,
+                            number: number,
+                            working: date.timeIntervalSince(start),
+                            tone: effectiveTone
+                        )
+                        : NagMessages.body(
+                            title: task.title,
+                            notes: task.notes,
+                            number: number,
+                            overdue: overdue,
+                            tone: effectiveTone
+                        ),
                     category: category,
                     timeSensitive: task.style.breakThroughFocus
                 )))
@@ -228,60 +247,164 @@ public enum NagMessages {
         tierStarts.first { $0 > overdue }
     }
 
-    public static func body(title: String, notes: String, number: Int, overdue: TimeInterval) -> String {
+    public static func body(
+        title: String,
+        notes: String,
+        number: Int,
+        overdue: TimeInterval,
+        tone: NagTone = .standard
+    ) -> String {
         if number <= 1 {
-            return notes.isEmpty ? "It's time. Start with the smallest step." : notes
+            return notes.isEmpty ? firstStep(for: tone) : notes
         }
         let late = NagFormat.duration(overdue)
-        let lines: [String]
-        switch tier(overdue: overdue) {
-        case 0:
-            lines = [
+        let lines = lines(for: tone, tier: tier(overdue: overdue), number: number, late: late)
+        return lines[number % lines.count]
+    }
+
+    public static func repeatingBody(title: String, tier: Int, tone: NagTone = .standard) -> String {
+        switch tone {
+        case .gentle:
+            switch tier {
+            case 0: "When you're ready, try the smallest step."
+            case 1: "A small start still counts. Try two minutes."
+            case 2: "This can wait for your next small step."
+            default: "Be kind to yourself. One tiny step is enough."
+            }
+        case .standard:
+            switch tier {
+            case 0: "It's time. Start with the smallest step."
+            case 1: "Still not done. Two minutes is enough to start."
+            case 2: "Overdue. This takes less time than ignoring me."
+            default: "I'm not going to stop until this is done."
+            }
+        case .pushy:
+            switch tier {
+            case 0: "Start now. Do the smallest step."
+            case 1: "No more waiting. Give it two minutes."
+            case 2: "It's overdue. Do the first step now."
+            default: "Do it now. One tiny step, no excuses."
+            }
+        }
+    }
+
+    public static func checkInBody(
+        title: String,
+        number: Int,
+        working: TimeInterval,
+        tone: NagTone = .standard
+    ) -> String {
+        let lines = checkInLines(for: tone)
+        return lines[number % lines.count]
+    }
+
+    public static func checkInRepeatingBody(title: String, tone: NagTone = .standard) -> String {
+        switch tone {
+        case .gentle: "How's it going? Take one small next step when you're ready."
+        case .standard: "How's it going? Mark it done when it is."
+        case .pushy: "Keep moving. Do the next step, then mark it done."
+        }
+    }
+
+    private static func firstStep(for tone: NagTone) -> String {
+        switch tone {
+        case .gentle: "When you're ready, start with one small step."
+        case .standard: "It's time. Start with the smallest step."
+        case .pushy: "Start now. Do the smallest step."
+        }
+    }
+
+    private static func lines(for tone: NagTone, tier: Int, number: Int, late: String) -> [String] {
+        switch tone {
+        case .gentle:
+            switch tier {
+            case 0: [
+                "A good moment for one small step.",
+                "This is still here when you're ready.",
+                "Try just the first tiny step.",
+            ]
+            case 1: [
+                "\(late) later. A two-minute start still counts.",
+                "No judgment. Pick one small next step.",
+                "When you're ready, do the first tiny step.",
+            ]
+            case 2: [
+                "\(late) overdue. One small step can restart it.",
+                "Be kind to yourself. Try just two minutes.",
+                "This can begin with one manageable step.",
+            ]
+            default: [
+                "Still here to help. Choose one tiny step.",
+                "\(late) overdue. Start small when you're ready.",
+                "A fresh start can be just one small action.",
+            ]
+            }
+        case .standard:
+            switch tier {
+            case 0: [
                 "Nag #\(number). Now's a good moment.",
                 "Hey. This is still waiting for you.",
                 "Quick one: just start it.",
             ]
-        case 1:
-            lines = [
+            case 1: [
                 "Still not done, \(late) later. Two minutes is enough to start.",
                 "Nag #\(number). You said you'd do this.",
                 "Overdue by \(late). Do the first tiny step.",
             ]
-        case 2:
-            lines = [
+            case 2: [
                 "Nag #\(number). Seriously, \(late) overdue.",
                 "This takes less time than ignoring me.",
                 "Future you is asking. \(late) overdue.",
             ]
-        default:
-            lines = [
+            default: [
                 "Nag #\(number). I'm not going to stop.",
                 "\(late) overdue. Still here. Still nagging.",
                 "Do it now and I'll go quiet.",
             ]
+            }
+        case .pushy:
+            switch tier {
+            case 0: [
+                "Nag #\(number). Start the first step now.",
+                "Stop waiting. Do one tiny step.",
+                "Start it now. Just the first action.",
+            ]
+            case 1: [
+                "\(late) late. Give it two minutes now.",
+                "Nag #\(number). Do the first step already.",
+                "It's overdue. Start with one tiny step now.",
+            ]
+            case 2: [
+                "Nag #\(number). \(late) overdue. Act now.",
+                "Enough waiting. Do one small step now.",
+                "It's overdue. Take the first action now.",
+            ]
+            default: [
+                "Nag #\(number). No more delays. Start now.",
+                "\(late) overdue. Do one tiny step now.",
+                "Do the first step now. No more excuses.",
+            ]
+            }
         }
-        return lines[number % lines.count]
     }
 
-    public static func repeatingBody(title: String, tier: Int) -> String {
-        switch tier {
-        case 0: "It's time. Start with the smallest step."
-        case 1: "Still not done. Two minutes is enough to start."
-        case 2: "Overdue. This takes less time than ignoring me."
-        default: "I'm not going to stop until this is done."
-        }
-    }
-
-    public static func checkInBody(title: String, number: Int, working: TimeInterval) -> String {
-        let lines = [
+    private static func checkInLines(for tone: NagTone) -> [String] {
+        switch tone {
+        case .gentle: [
+            "Still on it? Try one small next step when you're ready.",
+            "How's it going? A tiny next step still counts.",
+            "A gentle check-in. Keep going when you're ready.",
+        ]
+        case .standard: [
             "Still on it? Nudge when you're done.",
             "How's it going? Mark it done when it is.",
             "A gentle check-in. Keep going when you're ready.",
         ]
-        return lines[number % lines.count]
-    }
-
-    public static func checkInRepeatingBody(title: String) -> String {
-        "How's it going? Mark it done when it is."
+        case .pushy: [
+            "Still on it? Do the next step, then mark it done.",
+            "Keep moving. Take one small next step now.",
+            "Check-in time. Finish the next step now.",
+        ]
+        }
     }
 }

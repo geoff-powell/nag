@@ -137,7 +137,12 @@ final class MacModel {
             let state = store.load()
             let now = Date()
             let planner = NagPlanner(allowRepeating: !state.settings.quietHours.isActive, calendar: calendar)
-            let plan = planner.plan(tasks: state.tasks, quietHours: state.settings.quietHours, now: now)
+            let plan = planner.plan(
+                tasks: state.tasks,
+                quietHours: state.settings.quietHours,
+                tone: state.settings.nagTone,
+                now: now
+            )
             await NotificationSync.apply(plan, tasks: state.tasks, now: now)
         }
     }

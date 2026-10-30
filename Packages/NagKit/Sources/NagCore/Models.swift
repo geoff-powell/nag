@@ -70,6 +70,8 @@ public struct NagStyle: Codable, Hashable, Sendable {
     public var breakThroughFocus: Bool
     /// How long a nag stays quiet after it is started.
     public var workMinutes: Int
+    /// Overrides the app's default wording for this nag.
+    public var tone: NagTone?
 
     public init(
         intervalMinutes: Int = 15,
@@ -77,7 +79,8 @@ public struct NagStyle: Codable, Hashable, Sendable {
         snoozeMinutes: Int = 10,
         maxSnoozes: Int? = 3,
         breakThroughFocus: Bool = true,
-        workMinutes: Int = 30
+        workMinutes: Int = 30,
+        tone: NagTone? = nil
     ) {
         self.intervalMinutes = intervalMinutes
         self.escalation = escalation
@@ -85,10 +88,11 @@ public struct NagStyle: Codable, Hashable, Sendable {
         self.maxSnoozes = maxSnoozes
         self.breakThroughFocus = breakThroughFocus
         self.workMinutes = workMinutes
+        self.tone = tone
     }
 
     private enum CodingKeys: String, CodingKey {
-        case intervalMinutes, escalation, snoozeMinutes, maxSnoozes, breakThroughFocus, workMinutes
+        case intervalMinutes, escalation, snoozeMinutes, maxSnoozes, breakThroughFocus, workMinutes, tone
     }
 
     /// Every field has its original default so styles saved by older versions still load.
@@ -100,6 +104,8 @@ public struct NagStyle: Codable, Hashable, Sendable {
         maxSnoozes = try c.decodeIfPresent(Int.self, forKey: .maxSnoozes)
         breakThroughFocus = try c.decodeIfPresent(Bool.self, forKey: .breakThroughFocus) ?? true
         workMinutes = min(max(try c.decodeIfPresent(Int.self, forKey: .workMinutes) ?? 30, 1), 1440)
+        tone = (try? c.decodeIfPresent(String.self, forKey: .tone))
+            .flatMap { NagTone(rawValue: $0) }
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -110,6 +116,7 @@ public struct NagStyle: Codable, Hashable, Sendable {
         try c.encodeIfPresent(maxSnoozes, forKey: .maxSnoozes)
         try c.encode(breakThroughFocus, forKey: .breakThroughFocus)
         try c.encode(workMinutes, forKey: .workMinutes)
+        try c.encodeIfPresent(tone?.rawValue, forKey: .tone)
     }
 }
 
@@ -467,6 +474,7 @@ public struct QuietHours: Codable, Hashable, Sendable {
 
 public struct AppSettings: Codable, Hashable, Sendable {
     public var quietHours: QuietHours
+    public var nagTone: NagTone
     public var emergencyUnlocksPerMonth: Int
     public var emergencyUnlocksUsed: [Date]
     public var hasOnboarded: Bool
@@ -475,12 +483,14 @@ public struct AppSettings: Codable, Hashable, Sendable {
 
     public init(
         quietHours: QuietHours = QuietHours(),
+        nagTone: NagTone = .standard,
         emergencyUnlocksPerMonth: Int = 3,
         emergencyUnlocksUsed: [Date] = [],
         hasOnboarded: Bool = false,
         screenTimeApproved: Bool = false
     ) {
         self.quietHours = quietHours
+        self.nagTone = nagTone
         self.emergencyUnlocksPerMonth = emergencyUnlocksPerMonth
         self.emergencyUnlocksUsed = emergencyUnlocksUsed
         self.hasOnboarded = hasOnboarded
@@ -488,12 +498,13 @@ public struct AppSettings: Codable, Hashable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case quietHours, emergencyUnlocksPerMonth, emergencyUnlocksUsed, hasOnboarded, screenTimeApproved
+        case quietHours, nagTone, emergencyUnlocksPerMonth, emergencyUnlocksUsed, hasOnboarded, screenTimeApproved
     }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         quietHours = try c.decodeIfPresent(QuietHours.self, forKey: .quietHours) ?? QuietHours()
+        nagTone = try c.decodeIfPresent(NagTone.self, forKey: .nagTone) ?? .standard
         emergencyUnlocksPerMonth = try c.decodeIfPresent(Int.self, forKey: .emergencyUnlocksPerMonth) ?? 3
         emergencyUnlocksUsed = try c.decodeIfPresent([Date].self, forKey: .emergencyUnlocksUsed) ?? []
         hasOnboarded = try c.decodeIfPresent(Bool.self, forKey: .hasOnboarded) ?? false

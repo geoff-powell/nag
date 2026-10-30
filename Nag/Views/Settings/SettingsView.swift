@@ -48,6 +48,14 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Picker("Nag tone", selection: settingBinding(\.nagTone)) {
+                        ForEach(NagTone.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                } footer: {
+                    Text(model.state.settings.nagTone.explanation)
+                }
+
+                Section {
                     Stepper(
                         "Emergency unlocks: \(model.state.settings.emergencyUnlocksPerMonth) a month",
                         value: settingBinding(\.emergencyUnlocksPerMonth),
