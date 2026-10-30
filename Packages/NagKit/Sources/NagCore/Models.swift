@@ -535,6 +535,7 @@ public struct QuietHours: Codable, Hashable, Sendable {
 
 public struct AppSettings: Codable, Hashable, Sendable {
     public var quietHours: QuietHours
+    public var quietHoursUpdatedAt: Date?
     public var nagTone: NagTone
     public var emergencyUnlocksPerMonth: Int
     public var emergencyUnlocksUsed: [Date]
@@ -544,6 +545,7 @@ public struct AppSettings: Codable, Hashable, Sendable {
 
     public init(
         quietHours: QuietHours = QuietHours(),
+        quietHoursUpdatedAt: Date? = nil,
         nagTone: NagTone = .standard,
         emergencyUnlocksPerMonth: Int = 3,
         emergencyUnlocksUsed: [Date] = [],
@@ -551,6 +553,7 @@ public struct AppSettings: Codable, Hashable, Sendable {
         screenTimeApproved: Bool = false
     ) {
         self.quietHours = quietHours
+        self.quietHoursUpdatedAt = quietHoursUpdatedAt
         self.nagTone = nagTone
         self.emergencyUnlocksPerMonth = emergencyUnlocksPerMonth
         self.emergencyUnlocksUsed = emergencyUnlocksUsed
@@ -559,17 +562,24 @@ public struct AppSettings: Codable, Hashable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case quietHours, nagTone, emergencyUnlocksPerMonth, emergencyUnlocksUsed, hasOnboarded, screenTimeApproved
+        case quietHours, quietHoursUpdatedAt, nagTone, emergencyUnlocksPerMonth, emergencyUnlocksUsed, hasOnboarded, screenTimeApproved
     }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         quietHours = try c.decodeIfPresent(QuietHours.self, forKey: .quietHours) ?? QuietHours()
+        quietHoursUpdatedAt = try c.decodeIfPresent(Date.self, forKey: .quietHoursUpdatedAt)
         nagTone = try c.decodeIfPresent(NagTone.self, forKey: .nagTone) ?? .standard
         emergencyUnlocksPerMonth = try c.decodeIfPresent(Int.self, forKey: .emergencyUnlocksPerMonth) ?? 3
         emergencyUnlocksUsed = try c.decodeIfPresent([Date].self, forKey: .emergencyUnlocksUsed) ?? []
         hasOnboarded = try c.decodeIfPresent(Bool.self, forKey: .hasOnboarded) ?? false
         screenTimeApproved = try c.decodeIfPresent(Bool.self, forKey: .screenTimeApproved) ?? false
+    }
+
+    public mutating func setQuietHours(_ new: QuietHours, at now: Date) {
+        guard new != quietHours else { return }
+        quietHours = new
+        quietHoursUpdatedAt = now
     }
 }
 

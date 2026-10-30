@@ -19,6 +19,7 @@ final class AppModel {
 
     @ObservationIgnored private var changeObservation: SharedStore.ChangeObservation?
     @ObservationIgnored private var cloudSync: CloudTaskSync?
+    @ObservationIgnored private var quietHoursSync: QuietHoursSync?
     @ObservationIgnored private var syncTask: Task<Void, Never>?
     /// UI tests: no iCloud, and no shields, DeviceActivity schedules or notifications. On a real
     /// iPhone those are shared with the user's real Nag, so a test run must not touch them.
@@ -45,12 +46,21 @@ final class AppModel {
         }
         cloudSync = cloud
         cloud.start()
+        let quietHours = QuietHoursSync(store: store) { [weak self] in
+            Task { @MainActor in
+                self?.reload()
+                self?.sync()
+            }
+        }
+        quietHoursSync = quietHours
+        quietHours.start()
         sync()
     }
 
     func becameActive() {
         reload()
         cloudSync?.reconcile()
+        quietHoursSync?.reconcile()
         sync()
         Task { await refreshPermissions() }
     }
@@ -61,11 +71,15 @@ final class AppModel {
 
     /// Applies a change to the stored state, then syncs everything that depends on it.
     func update(_ change: (inout NagState) -> Void) {
+        let previousQuietHours = state.settings.syncedQuietHours
         state = store.update { state in
             change(&state)
             return state
         }
         cloudSync?.reconcile()
+        if state.settings.syncedQuietHours != previousQuietHours {
+            quietHoursSync?.reconcile()
+        }
         sync()
     }
 

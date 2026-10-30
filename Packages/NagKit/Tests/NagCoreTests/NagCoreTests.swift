@@ -713,6 +713,122 @@ struct EscalationTests {
     }
 }
 
+@Suite struct QuietHoursSyncTests {
+    let older = Fixture.date(28, 8)
+    let newer = Fixture.date(28, 9)
+    let enabled = QuietHours(enabled: true, startMinute: 22 * 60, endMinute: 8 * 60)
+    let disabled = QuietHours(enabled: false, startMinute: 22 * 60, endMinute: 8 * 60)
+
+    @Test func laterEditWins() {
+        let old = SyncedQuietHours(quietHours: enabled, updatedAt: older)
+        let new = SyncedQuietHours(quietHours: disabled, updatedAt: newer)
+
+        #expect(QuietHoursMerge.merge(old, new) == new)
+        #expect(QuietHoursMerge.merge(new, old) == new)
+    }
+
+    @Test func mergeIsCommutativeAndIdempotent() {
+        let a = SyncedQuietHours(quietHours: enabled, updatedAt: older)
+        let b = SyncedQuietHours(quietHours: disabled, updatedAt: newer)
+
+        #expect(QuietHoursMerge.merge(a, b) == QuietHoursMerge.merge(b, a))
+        #expect(QuietHoursMerge.merge(a, a) == a)
+    }
+
+    @Test func tiesBreakDeterministically() {
+        let a = SyncedQuietHours(
+            quietHours: QuietHours(enabled: true, startMinute: 21 * 60, endMinute: 7 * 60),
+            updatedAt: newer
+        )
+        let b = SyncedQuietHours(
+            quietHours: QuietHours(enabled: true, startMinute: 23 * 60, endMinute: 9 * 60),
+            updatedAt: newer
+        )
+
+        #expect(QuietHoursMerge.merge(a, b) == b)
+        #expect(QuietHoursMerge.merge(b, a) == b)
+    }
+
+    @Test func aDeviceThatNeverEditedQuietHoursLoses() {
+        let neverEdited = AppSettings(quietHours: enabled).syncedQuietHours
+        let deliberateEdit = SyncedQuietHours(quietHours: disabled, updatedAt: older)
+
+        #expect(neverEdited.updatedAt == .distantPast)
+        #expect(QuietHoursMerge.merge(neverEdited, deliberateEdit) == deliberateEdit)
+        #expect(QuietHoursMerge.merge(deliberateEdit, neverEdited) == deliberateEdit)
+    }
+
+    @Test func customisedUnstampedQuietHoursPublishOnce() {
+        let settings = AppSettings(quietHours: enabled)
+
+        let migrated = QuietHoursMerge.localValue(for: settings, now: newer)
+        var persisted = settings
+        persisted.apply(migrated)
+
+        #expect(migrated == SyncedQuietHours(quietHours: enabled, updatedAt: newer))
+        #expect(QuietHoursMerge.localValue(for: persisted, now: newer.addingTimeInterval(60)) == migrated)
+    }
+
+    @Test func untouchedDefaultStillLoses() {
+        let untouched = QuietHoursMerge.localValue(for: AppSettings(), now: newer)
+        let deliberateEdit = SyncedQuietHours(quietHours: enabled, updatedAt: older)
+
+        #expect(untouched.updatedAt == .distantPast)
+        #expect(QuietHoursMerge.merge(untouched, deliberateEdit) == deliberateEdit)
+        #expect(QuietHoursMerge.merge(deliberateEdit, untouched) == deliberateEdit)
+    }
+
+    @Test func disablingQuietHoursSyncs() {
+        let enabledEarlier = SyncedQuietHours(quietHours: enabled, updatedAt: older)
+        let disabledLater = SyncedQuietHours(quietHours: disabled, updatedAt: newer)
+
+        #expect(QuietHoursMerge.merge(enabledEarlier, disabledLater) == disabledLater)
+        #expect(QuietHoursMerge.merge(disabledLater, enabledEarlier) == disabledLater)
+    }
+
+    @Test func settingQuietHoursStampsTheTime() {
+        var settings = AppSettings()
+
+        settings.setQuietHours(enabled, at: newer)
+
+        #expect(settings.quietHours == enabled)
+        #expect(settings.quietHoursUpdatedAt == newer)
+    }
+
+    @Test func settingTheSameValueDoesNotRestamp() {
+        var settings = AppSettings(quietHours: enabled, quietHoursUpdatedAt: older)
+
+        settings.setQuietHours(enabled, at: newer)
+
+        #expect(settings.quietHoursUpdatedAt == older)
+    }
+
+    @Test func settingsDecodeWithoutQuietHoursUpdatedAt() throws {
+        let oldJSON = """
+        {
+          "quietHours": { "enabled": true, "startMinute": 1320, "endMinute": 480 },
+          "emergencyUnlocksPerMonth": 3,
+          "emergencyUnlocksUsed": [],
+          "hasOnboarded": true,
+          "screenTimeApproved": false
+        }
+        """
+
+        let settings = try JSONDecoder().decode(AppSettings.self, from: Data(oldJSON.utf8))
+
+        #expect(settings.quietHours == enabled)
+        #expect(settings.quietHoursUpdatedAt == nil)
+    }
+
+    @Test func syncedQuietHoursRoundTripsThroughJSON() throws {
+        let original = SyncedQuietHours(quietHours: enabled, updatedAt: newer)
+
+        let decoded = try JSONDecoder().decode(SyncedQuietHours.self, from: JSONEncoder().encode(original))
+
+        #expect(decoded == original)
+    }
+}
+
 struct QuietHoursTests {
     let calendar = Fixture.calendar
     let overnight = QuietHours(enabled: true, startMinute: 22 * 60, endMinute: 8 * 60)
