@@ -1,7 +1,8 @@
 name: Deploy
 
-# Uploads the iPhone app to TestFlight and/or publishes a notarized Mac app as a GitHub release.
-# Run it from Actions > Deploy > Run workflow, or push a tag like v1.0.
+# Uploads the iPhone app to TestFlight and notarizes the Mac app, then publishes one GitHub release
+# for the deploy with the Mac zip attached. Runs after every merge to main once Tests passes, from
+# Actions > Deploy > Run workflow, or when you push a tag like v1.0.
 # Required secrets are listed in the README under "Deploying from GitHub Actions".
 
 on:
@@ -14,28 +15,50 @@ on:
         default: both
   push:
     tags: ["v*"]
+  # After a merge to main, Tests has already run for that commit, so deploy only once it passes.
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+    branches: [main]
 
 concurrency:
-  group: deploy
+  # Runs that skip (Tests failed, or ran for a pull request) get their own group, so they never
+  # replace a deploy that's waiting its turn.
+  group: >-
+    ${{ (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
+    && 'deploy' || format('deploy-skipped-{0}', github.run_id) }}
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 env:
-  DEPLOY_IPHONE: ${{ github.event_name == 'push' || inputs.platform == 'both' || inputs.platform == 'iphone' }}
-  DEPLOY_MAC: ${{ github.event_name == 'push' || inputs.platform == 'both' || inputs.platform == 'mac' }}
+  DEPLOY_IPHONE: ${{ github.event_name != 'workflow_dispatch' || inputs.platform != 'mac' }}
+  DEPLOY_MAC: ${{ github.event_name != 'workflow_dispatch' || inputs.platform != 'iphone' }}
+  # A workflow_run starts at main's newest commit, which may be later than the one Tests checked.
+  DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
-  # Cheap Linux check, so missing setup fails in seconds rather than after the macOS tests.
+  # Cheap Linux check, so missing setup fails in seconds rather than after the macOS tests. A platform
+  # with missing secrets is skipped and reported, so the other one still ships.
   preflight:
     name: Check secrets
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     outputs:
-      iphone: ${{ env.DEPLOY_IPHONE }}
-      mac: ${{ env.DEPLOY_MAC }}
+      iphone: ${{ steps.secrets.outputs.iphone }}
+      mac: ${{ steps.secrets.outputs.mac }}
+      missing: ${{ steps.secrets.outputs.missing }}
+      version: ${{ steps.version.outputs.version }}
+      build: ${{ steps.version.outputs.build }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+
       - name: Check required secrets
+        id: secrets
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -44,32 +67,76 @@ jobs:
           SIGNING_CERTS_P12_PASSWORD: ${{ secrets.SIGNING_CERTS_P12_PASSWORD }}
           MAC_PROFILE_BASE64: ${{ secrets.MAC_PROFILE_BASE64 }}
         run: |
-          required=(ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8_BASE64 SIGNING_CERTS_P12_BASE64 SIGNING_CERTS_P12_PASSWORD)
+          # Prints the names of any empty variables among its arguments.
+          empty_of() {
+            local name empty=()
+            for name in "$@"; do
+              [[ -n "${!name}" ]] || empty+=("$name")
+            done
+            echo "${empty[*]}"
+          }
+          shared=(ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8_BASE64 SIGNING_CERTS_P12_BASE64 SIGNING_CERTS_P12_PASSWORD)
+          iphone=false mac=false missing=""
+          if [[ "$DEPLOY_IPHONE" == true ]]; then
+            need="$(empty_of "${shared[@]}")"
+            if [[ -z "$need" ]]; then iphone=true; else missing+="iPhone needs $need. "; fi
+          fi
           if [[ "$DEPLOY_MAC" == true ]]; then
-            required+=(MAC_PROFILE_BASE64)
+            need="$(empty_of "${shared[@]}" MAC_PROFILE_BASE64)"
+            if [[ -z "$need" ]]; then mac=true; else missing+="Mac needs $need. "; fi
           fi
-          missing=()
-          for name in "${required[@]}"; do
-            [[ -n "${!name}" ]] || missing+=("$name")
-          done
-          if (( ${#missing[@]} )); then
-            echo "::error::Missing repository secrets: ${missing[*]}. See README > Deploying from GitHub Actions."
-            exit 1
-          fi
-          echo "iPhone: $DEPLOY_IPHONE, Mac: $DEPLOY_MAC"
+          echo "iPhone: $iphone, Mac: $mac ${missing:+(skipping: $missing)}"
+          {
+            echo "iphone=$iphone"
+            echo "mac=$mac"
+            echo "missing=$missing"
+          } >> "$GITHUB_OUTPUT"
+
+      # One build number for both apps, so the release, TestFlight and the Mac zip all match.
+      - name: Pick version and tag
+        id: version
+        env:
+          PUSHED_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          source scripts/lib.sh
+          version="$(marketing_version)"
+          build="$(next_build_number)"
+          tag="${PUSHED_TAG:-v$version-$build}"
+          echo "Nag $version ($build), release $tag"
+          {
+            echo "version=$version"
+            echo "build=$build"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+
+  missing-secrets:
+    name: Report missing secrets
+    needs: preflight
+    if: needs.preflight.outputs.missing != ''
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          MISSING: ${{ needs.preflight.outputs.missing }}
+        run: |
+          echo "::error::Missing repository secrets. ${MISSING}See README > Deploying from GitHub Actions."
+          exit 1
 
   tests:
     needs: preflight
+    # After a merge, the Tests run that triggered this deploy already covered the commit.
+    if: github.event_name != 'workflow_run' && (needs.preflight.outputs.iphone == 'true' || needs.preflight.outputs.mac == 'true')
     uses: ./.github/workflows/tests.yml
 
   iphone:
     name: iPhone to TestFlight
     needs: [preflight, tests]
-    if: needs.preflight.outputs.iphone == 'true'
+    if: ${{ !cancelled() && needs.preflight.outputs.iphone == 'true' && (needs.tests.result == 'success' || github.event_name == 'workflow_run') }}
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
 
       - uses: ./.github/actions/apple-signing
         with:
@@ -80,6 +147,8 @@ jobs:
           certificates-p12-password: ${{ secrets.SIGNING_CERTS_P12_PASSWORD }}
 
       - name: Archive and upload
+        env:
+          NAG_BUILD_NUMBER: ${{ needs.preflight.outputs.build }}
         run: scripts/testflight.sh
 
       - name: Keep logs
@@ -96,15 +165,15 @@ jobs:
           rm -f "$RUNNER_TEMP"/AuthKey_*.p8
 
   mac:
-    name: Mac to GitHub release
+    name: Mac notarized build
     needs: [preflight, tests]
-    if: needs.preflight.outputs.mac == 'true'
+    if: ${{ !cancelled() && needs.preflight.outputs.mac == 'true' && (needs.tests.result == 'success' || github.event_name == 'workflow_run') }}
     runs-on: macos-latest
     timeout-minutes: 60
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
 
       - uses: ./.github/actions/apple-signing
         with:
@@ -115,10 +184,17 @@ jobs:
           certificates-p12-password: ${{ secrets.SIGNING_CERTS_P12_PASSWORD }}
           provisioning-profile-base64: ${{ secrets.MAC_PROFILE_BASE64 }}
 
-      - name: Archive, notarize and release
+      - name: Archive and notarize
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: scripts/release-mac.sh
+          NAG_BUILD_NUMBER: ${{ needs.preflight.outputs.build }}
+        run: scripts/release-mac.sh --no-publish
+
+      - name: Keep the app for the release
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-app
+          path: build/mac/Nag-*.zip
+          if-no-files-found: error
 
       - name: Keep logs
         if: failure()
@@ -132,3 +208,47 @@ jobs:
         run: |
           security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
           rm -f "$RUNNER_TEMP"/AuthKey_*.p8
+
+  # One release per deploy, covering whichever platforms shipped. If one failed, the run is still
+  # red, and the release records what did go out.
+  release:
+    name: GitHub release
+    needs: [preflight, iphone, mac]
+    if: ${{ !cancelled() && (needs.iphone.result == 'success' || needs.mac.result == 'success') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download the Mac app
+        if: needs.mac.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-app
+          path: dist
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.preflight.outputs.tag }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+          BUILD: ${{ needs.preflight.outputs.build }}
+          IPHONE: ${{ needs.iphone.result }}
+          MAC: ${{ needs.mac.result }}
+        run: |
+          notes="$RUNNER_TEMP/notes.md"
+          {
+            if [[ "$IPHONE" == success ]]; then
+              echo "- **iPhone:** build $BUILD is on TestFlight once App Store Connect finishes processing it."
+            fi
+            if [[ "$MAC" == success ]]; then
+              echo "- **Mac:** download the zip below, unzip it, and move Nag to Applications. Signed with Developer ID and notarized by Apple."
+            fi
+          } > "$notes"
+          shopt -s nullglob
+          gh release create "$TAG" dist/*.zip \
+            --target "$DEPLOY_SHA" \
+            --title "Nag $VERSION ($BUILD)" \
+            --notes-file "$notes" \
+            --generate-notes
+          echo "Released $TAG."

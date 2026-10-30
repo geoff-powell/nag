@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Builds the Mac app with Developer ID, notarizes it, and publishes it as a GitHub release.
 #
-#   scripts/release-mac.sh             archive, notarize, staple, publish a GitHub release
-#   scripts/release-mac.sh --dry-run   archive and export only
+#   scripts/release-mac.sh                archive, notarize, staple, publish a GitHub release
+#   scripts/release-mac.sh --no-publish   same, but stop at the zip in build/mac (CI publishes it)
+#   scripts/release-mac.sh --dry-run      archive and export only
 #
 # Locally: run on a Mac that's registered in your developer account (Xcode does this the first time
 # you run NagMac from it). One-time setup for notarizing, with an app-specific password from
@@ -22,9 +23,16 @@ set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
 dry_run=false
-if [[ "${1:-}" == "--dry-run" ]]; then
-    dry_run=true
-fi
+publish=true
+case "${1:-}" in
+    "") ;;
+    --dry-run) dry_run=true ;;
+    --no-publish) publish=false ;;
+    *)
+        echo "Unknown option: $1" >&2
+        exit 1
+        ;;
+esac
 
 build_dir="$repo_root/build/mac"
 archive="$build_dir/Nag.xcarchive"
@@ -83,6 +91,11 @@ spctl --assess --type execute --verbose "$app"
 
 zip="$build_dir/Nag-$version-$build_number.zip"
 ditto -c -k --keepParent "$app" "$zip"
+
+if ! $publish; then
+    echo "Notarized: $zip"
+    exit 0
+fi
 
 if [[ -n "${NAG_GITHUB_USER:-}" ]]; then
     GH_TOKEN="$(gh auth token --user "$NAG_GITHUB_USER")"

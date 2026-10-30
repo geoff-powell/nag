@@ -24,7 +24,12 @@ marketing_version() {
 }
 
 # Minutes since 2020 in UTC: always increases, fits App Store limits, same for app and extensions.
+# NAG_BUILD_NUMBER overrides it, so CI can give the iPhone and Mac builds of one deploy the same number.
 next_build_number() {
+    if [[ -n "${NAG_BUILD_NUMBER:-}" ]]; then
+        echo "$NAG_BUILD_NUMBER"
+        return
+    fi
     echo $(( ($(date -u +%s) - 1577836800) / 60 ))
 }
 

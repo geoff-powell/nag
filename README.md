@@ -105,10 +105,13 @@ Two workflows:
 
 - **Tests** (`.github/workflows/tests.yml`) runs the unit tests and builds both apps on every push to
   `main` and every pull request.
-- **Deploy** (`.github/workflows/deploy.yml`) runs the tests, then uploads the iPhone app to
-  TestFlight and publishes the notarized Mac app as a GitHub release. Start it from
-  **Actions → Deploy → Run workflow** (pick iPhone, Mac or both), or push a tag like `v1.0` to
-  deploy both.
+- **Deploy** (`.github/workflows/deploy.yml`) uploads the iPhone app to TestFlight, notarizes the
+  Mac app, and publishes one GitHub release for the deploy. The release is tagged
+  `v<version>-<build>`, has the Mac zip attached, and has notes generated from the merged pull
+  requests. Both apps share the build number. Deploy runs automatically after every merge to
+  `main`, once Tests passes for that commit. You can also start it from **Actions → Deploy → Run
+  workflow** (pick iPhone, Mac or both), or push a tag like `v1.0` to deploy both under that tag.
+  Manual and tag deploys run the tests first.
 
 CI can't sign in to Xcode, so Deploy needs these repository secrets. Set them once with `gh`
 from this folder, signed in as the repo owner (`gh auth switch --user geoff-powell`).
@@ -156,9 +159,10 @@ base64 -i Nag_Mac_Developer_ID.provisionprofile | gh secret set MAC_PROFILE_BASE
 If the App ID isn't listed, run the NagMac scheme from Xcode once on your Mac, which registers it.
 The profile expires after a few years. Make a new one and update the secret when it does.
 
-Deploy checks for missing secrets first, on a cheap Linux runner, and fails right away with the
-names of any that are missing. iPhone deploys also need the Family Controls distribution approval
-described above. Mac deploys don't.
+Deploy checks for missing secrets first, on a cheap Linux runner. A platform whose secrets are
+missing is skipped and the run fails with their names, but the other platform still ships and gets
+its release. iPhone deploys also need the Family Controls distribution approval described above.
+Mac deploys don't.
 
 ## How it works
 
