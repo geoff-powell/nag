@@ -168,6 +168,130 @@ struct SnoozeOptionTests {
     }
 }
 
+struct StartedTests {
+    let calendar = Fixture.calendar
+
+    @Test func startingSilencesNaggingForTheWorkingWindow() {
+        var task = NagTask(title: "Laundry", startAt: Fixture.date(28, 8), style: NagStyle(workMinutes: 30), now: Fixture.date(28, 7))
+        task.start(at: Fixture.date(28, 9))
+        #expect(task.nagStart == Fixture.date(28, 9, 30))
+        #expect(!task.isNagging(at: Fixture.date(28, 9, 29)))
+        #expect(task.isNagging(at: Fixture.date(28, 9, 30)))
+    }
+
+    @Test func startingDoesNotUseASnooze() {
+        var task = NagTask(title: "Laundry", startAt: Fixture.date(28, 8), style: NagStyle(maxSnoozes: 2), now: Fixture.date(28, 7))
+        task.start(at: Fixture.date(28, 9))
+        #expect(task.snoozeCount == 0)
+        #expect(task.snoozesLeft == 2)
+        #expect(task.canSnooze(at: Fixture.date(28, 9)))
+    }
+
+    @Test func startedNagIsStillDueForLocks() {
+        let now = Fixture.date(28, 9)
+        var task = NagTask(title: "Laundry", startAt: Fixture.date(28, 8), now: Fixture.date(28, 7))
+        task.start(at: now)
+        #expect(!task.isSatisfied(at: now, calendar: calendar))
+        #expect(task.canComplete(at: now, calendar: calendar))
+        #expect(task.isOutstanding(at: now))
+        var profile = LockProfile(name: "Focus", requirements: [UnlockRequirement(kind: .clearDueNags)])
+        profile.status = .locked(LockSession(startedAt: now))
+        let status = UnlockEvaluator.evaluate(profile, state: NagState(tasks: [task]), steps: nil, now: now, calendar: calendar)
+        #expect(status.first?.isMet == false)
+    }
+
+    @Test func completingClearsStarted() {
+        var task = NagTask(title: "Laundry", startAt: Fixture.date(28, 8), now: Fixture.date(28, 7))
+        task.start(at: Fixture.date(28, 9))
+        task.complete(at: Fixture.date(28, 10), calendar: calendar)
+        #expect(task.startedAt == nil)
+    }
+
+    @Test func movingToANewOccurrenceClearsStarted() {
+        var task = NagTask(title: "Laundry", startAt: Fixture.date(28, 8), repeatRule: .daily, now: Fixture.date(28, 7))
+        task.start(at: Fixture.date(28, 9))
+        task.startAt = Fixture.date(29, 8)
+        #expect(!task.isStarted(at: Fixture.date(29, 9)))
+    }
+
+    @Test func nagStartIgnoresAStartedAtEarlierThanStartAt() {
+        var task = NagTask(title: "Laundry", startAt: Fixture.date(29, 8), now: Fixture.date(28, 7))
+        task.startedAt = Fixture.date(28, 9)
+        #expect(task.workingUntil() == nil)
+        #expect(task.nagStart == Fixture.date(29, 8))
+    }
+
+    @Test func checkInsUseTheBaseIntervalWithNoEscalation() {
+        var task = NagTask(title: "Laundry", startAt: Fixture.date(28, 8), style: NagStyle(intervalMinutes: 15, escalation: .relentless, workMinutes: 30), now: Fixture.date(28, 7))
+        task.start(at: Fixture.date(28, 9))
+        let plan = NagPlanner(calendar: calendar).plan(tasks: [task], quietHours: QuietHours(), now: Fixture.date(28, 9, 31))
+        #expect(plan.notifications.first?.trigger == .every(seconds: 900))
+    }
+
+    @Test func checkInWordingIsCalm() {
+        var task = NagTask(title: "Laundry", startAt: Fixture.date(28, 8), style: NagStyle(workMinutes: 30), now: Fixture.date(28, 7))
+        task.start(at: Fixture.date(28, 9))
+        let plan = NagPlanner(calendar: calendar).plan(tasks: [task], quietHours: QuietHours(), now: Fixture.date(28, 9, 31))
+        #expect(plan.notifications.first?.body == NagMessages.checkInRepeatingBody(title: task.title))
+        #expect(plan.notifications.first?.body.lowercased().contains("overdue") == false)
+    }
+
+    @Test func startingChangesTheNotificationIdentifier() {
+        let now = Fixture.date(28, 9)
+        var task = NagTask(title: "Laundry", startAt: Fixture.date(28, 8), style: NagStyle(workMinutes: 0), now: Fixture.date(28, 7))
+        let planner = NagPlanner(calendar: calendar)
+        let before = planner.plan(tasks: [task], quietHours: QuietHours(), now: now)
+        task.start(at: now)
+        let after = planner.plan(tasks: [task], quietHours: QuietHours(), now: now)
+        #expect(before.notifications.first?.identifier != after.notifications.first?.identifier)
+    }
+
+    @Test func plannerWakesWhenTheWorkingWindowEnds() {
+        var task = NagTask(title: "Laundry", startAt: Fixture.date(28, 8), style: NagStyle(workMinutes: 30), now: Fixture.date(28, 7))
+        task.start(at: Fixture.date(28, 9))
+        let plan = NagPlanner(calendar: calendar).plan(tasks: [task], quietHours: QuietHours(), now: Fixture.date(28, 9, 1))
+        #expect(plan.nextWake == Fixture.date(28, 9, 30))
+    }
+
+    @Test func nagStyleDecodesWithoutWorkMinutes() throws {
+        let style = NagStyle(intervalMinutes: 5, escalation: .relentless, snoozeMinutes: 15, maxSnoozes: nil, breakThroughFocus: false, workMinutes: 45)
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(style)) as! [String: Any]
+        json.removeValue(forKey: "workMinutes")
+        let decoded = try JSONDecoder().decode(NagStyle.self, from: JSONSerialization.data(withJSONObject: json))
+        #expect(decoded.workMinutes == 30)
+        #expect(decoded.intervalMinutes == style.intervalMinutes)
+        #expect(decoded.escalation == style.escalation)
+        #expect(decoded.snoozeMinutes == style.snoozeMinutes)
+        #expect(decoded.maxSnoozes == nil)
+        #expect(decoded.breakThroughFocus == style.breakThroughFocus)
+    }
+
+    @Test func nagStyleDecodesMainUnlimitedAndLimitedPayloads() throws {
+        let unlimited = Data(#"{"intervalMinutes":5,"escalation":"relentless","snoozeMinutes":15,"breakThroughFocus":false}"#.utf8)
+        let unlimitedStyle = try JSONDecoder().decode(NagStyle.self, from: unlimited)
+        #expect(unlimitedStyle.maxSnoozes == nil)
+        #expect(unlimitedStyle.workMinutes == 30)
+
+        let limited = Data(#"{"intervalMinutes":5,"escalation":"relentless","snoozeMinutes":15,"maxSnoozes":2,"breakThroughFocus":false}"#.utf8)
+        #expect(try JSONDecoder().decode(NagStyle.self, from: limited).maxSnoozes == 2)
+    }
+
+    @Test func nagStyleClampsDecodedWorkMinutes() throws {
+        let tooShort = Data(#"{"workMinutes":0}"#.utf8)
+        let tooLong = Data(#"{"workMinutes":1441}"#.utf8)
+        #expect(try JSONDecoder().decode(NagStyle.self, from: tooShort).workMinutes == 1)
+        #expect(try JSONDecoder().decode(NagStyle.self, from: tooLong).workMinutes == 1440)
+    }
+
+    @Test func startedAtDecodesFromOlderPayloads() throws {
+        let task = NagTask(title: "Old", startAt: Fixture.date(28, 9), now: Fixture.date(27, 9))
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(task)) as! [String: Any]
+        json.removeValue(forKey: "startedAt")
+        let decoded = try JSONDecoder().decode(NagTask.self, from: JSONSerialization.data(withJSONObject: json))
+        #expect(decoded.startedAt == nil)
+    }
+}
+
 struct CustomScheduleTests {
     let calendar = Fixture.calendar
 
@@ -536,6 +660,18 @@ struct UndoTests {
         #expect(task.lastCompletedAt == before.lastCompletedAt)
     }
 
+    @Test func undoRestoresStartedState() {
+        var task = NagTask(title: "Meds", startAt: Fixture.date(28, 8), repeatRule: .daily, now: Fixture.date(27, 8))
+        task.start(at: Fixture.date(28, 8, 30))
+        let startedAt = task.startedAt
+        task.complete(at: Fixture.date(28, 9), calendar: calendar)
+        #expect(task.startedAt == nil)
+        let didUndo = task.undoCompletion(at: Fixture.date(28, 9, 1))
+        #expect(didUndo)
+        #expect(task.startedAt == startedAt)
+        #expect(task.isStarted(at: Fixture.date(28, 9, 1)))
+    }
+
     @Test func undoRestoresAOneOffCompletion() {
         var task = NagTask(title: "Taxes", startAt: Fixture.date(28, 8), now: Fixture.date(27, 8))
         task.complete(at: Fixture.date(28, 9), calendar: calendar)
@@ -637,19 +773,23 @@ struct UndoTests {
             #expect(merged.completedAt == undone.completedAt)
             #expect(merged.snoozedUntil == undone.snoozedUntil)
             #expect(merged.snoozeCount == undone.snoozeCount)
+            #expect(merged.startedAt == undone.startedAt)
             #expect(merged.completionUndo == undone.completionUndo)
             #expect(merged.undoneCompletionAt == undone.undoneCompletionAt)
         }
     }
 
     @Test func undoFieldsDecodeFromOlderPayloads() throws {
-        let task = NagTask(title: "Old", startAt: Fixture.date(28, 9), repeatRule: .daily, now: Fixture.date(27, 9))
+        var task = NagTask(title: "Old", startAt: Fixture.date(28, 9), repeatRule: .daily, now: Fixture.date(27, 9))
+        task.start(at: Fixture.date(28, 9))
+        task.complete(at: Fixture.date(28, 10), calendar: calendar)
         var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(task)) as! [String: Any]
-        json.removeValue(forKey: "completionUndo")
         json.removeValue(forKey: "undoneCompletionAt")
+        var undo = json["completionUndo"] as! [String: Any]
+        undo.removeValue(forKey: "startedAt")
+        json["completionUndo"] = undo
         let decoded = try JSONDecoder().decode(NagTask.self, from: JSONSerialization.data(withJSONObject: json))
-        #expect(decoded == task)
-        #expect(decoded.completionUndo == nil)
+        #expect(decoded.completionUndo?.startedAt == nil)
         #expect(decoded.undoneCompletionAt == nil)
     }
 
@@ -679,13 +819,16 @@ struct TaskMergeTests {
     @Test func completionSurvivesALaterStaleEdit() {
         let base = NagTask(title: "Meds", startAt: Fixture.date(28, 8), now: Fixture.date(28, 7))
         var phone = base
+        phone.start(at: Fixture.date(28, 8, 30))
         phone.complete(at: Fixture.date(28, 9), calendar: Fixture.calendar)
         var mac = base
+        mac.start(at: Fixture.date(28, 8, 45))
         mac.snooze(at: Fixture.date(28, 9, 1))
 
         let merged = TaskMerge.merge(phone, mac)
         #expect(merged.isFinished)
         #expect(merged.snoozedUntil == nil)
+        #expect(!merged.isStarted(at: Fixture.date(28, 9, 1)))
         #expect(merged.completionUndo == phone.completionUndo)
         #expect(TaskMerge.merge(mac, phone) == merged)
     }

@@ -102,7 +102,10 @@ extension NagTask {
     public mutating func alignStartToSchedule(previous: NagTask?, now: Date, calendar: Calendar) {
         guard repeatRule == .custom, hasValidSchedule else { return }
         if let previous, previous.repeatRule == .custom, previous.times == times { return }
-        if let next = occurrence(after: now, calendar: calendar) { startAt = next }
+        if let next = occurrence(after: now, calendar: calendar), next != startAt {
+            startAt = next
+            startedAt = nil
+        }
     }
 
     /// A one-off nag that's done. Repeating nags are never finished; they move on to the next occurrence.
@@ -111,8 +114,9 @@ extension NagTask {
     /// When nagging starts, or resumes after a snooze, for the current occurrence.
     public var nagStart: Date? {
         guard !isFinished else { return nil }
-        if let snoozedUntil, snoozedUntil > startAt { return snoozedUntil }
-        return startAt
+        let base = max(startAt, snoozedUntil ?? .distantPast)
+        if let workEnd = workingUntil(), workEnd > base { return workEnd }
+        return base
     }
 
     /// The current occurrence has started and isn't done. Snoozed nags are still outstanding.
@@ -129,6 +133,27 @@ extension NagTask {
     public func isSnoozed(at now: Date) -> Bool {
         guard isOutstanding(at: now), let snoozedUntil else { return false }
         return snoozedUntil > now
+    }
+
+    public func isStarted(at now: Date) -> Bool {
+        guard !isFinished, let startedAt else { return false }
+        return startedAt >= startAt
+    }
+
+    public func workingUntil() -> Date? {
+        guard let startedAt, startedAt >= startAt else { return nil }
+        return startedAt.addingTimeInterval(TimeInterval(style.workMinutes * 60))
+    }
+
+    public func isWorking(at now: Date) -> Bool {
+        guard isStarted(at: now), let workingUntil = workingUntil() else { return false }
+        return now < workingUntil
+    }
+
+    public mutating func start(at now: Date) {
+        guard isOutstanding(at: now), !isStarted(at: now) else { return }
+        startedAt = now
+        updatedAt = now
     }
 
     /// Counts toward an unlock. One-off nags must be done; repeating nags must have nothing left today.
@@ -156,11 +181,13 @@ extension NagTask {
             snoozeCount: snoozeCount,
             lastCompletedAt: lastCompletedAt,
             completedAt: completedAt,
+            startedAt: startedAt,
             completedAtMoment: now
         )
         lastCompletedAt = now
         snoozedUntil = nil
         snoozeCount = 0
+        startedAt = nil
         updatedAt = now
         if isRepeating {
             // Finishing early completes the upcoming occurrence; finishing late skips any missed ones.
@@ -187,6 +214,7 @@ extension NagTask {
         snoozeCount = undo.snoozeCount
         lastCompletedAt = undo.lastCompletedAt
         completedAt = undo.completedAt
+        startedAt = undo.startedAt
         undoneCompletionAt = undo.completedAtMoment
         updatedAt = now
         completionUndo = nil

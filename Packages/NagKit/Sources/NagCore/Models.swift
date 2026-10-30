@@ -68,19 +68,48 @@ public struct NagStyle: Codable, Hashable, Sendable {
     public var maxSnoozes: Int?
     /// Deliver nags as Time Sensitive so they can break through Focus.
     public var breakThroughFocus: Bool
+    /// How long a nag stays quiet after it is started.
+    public var workMinutes: Int
 
     public init(
         intervalMinutes: Int = 15,
         escalation: Escalation = .gentle,
         snoozeMinutes: Int = 10,
         maxSnoozes: Int? = 3,
-        breakThroughFocus: Bool = true
+        breakThroughFocus: Bool = true,
+        workMinutes: Int = 30
     ) {
         self.intervalMinutes = intervalMinutes
         self.escalation = escalation
         self.snoozeMinutes = snoozeMinutes
         self.maxSnoozes = maxSnoozes
         self.breakThroughFocus = breakThroughFocus
+        self.workMinutes = workMinutes
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case intervalMinutes, escalation, snoozeMinutes, maxSnoozes, breakThroughFocus, workMinutes
+    }
+
+    /// Every field has its original default so styles saved by older versions still load.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        intervalMinutes = try c.decodeIfPresent(Int.self, forKey: .intervalMinutes) ?? 15
+        escalation = try c.decodeIfPresent(Escalation.self, forKey: .escalation) ?? .gentle
+        snoozeMinutes = try c.decodeIfPresent(Int.self, forKey: .snoozeMinutes) ?? 10
+        maxSnoozes = try c.decodeIfPresent(Int.self, forKey: .maxSnoozes)
+        breakThroughFocus = try c.decodeIfPresent(Bool.self, forKey: .breakThroughFocus) ?? true
+        workMinutes = min(max(try c.decodeIfPresent(Int.self, forKey: .workMinutes) ?? 30, 1), 1440)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(intervalMinutes, forKey: .intervalMinutes)
+        try c.encode(escalation, forKey: .escalation)
+        try c.encode(snoozeMinutes, forKey: .snoozeMinutes)
+        try c.encodeIfPresent(maxSnoozes, forKey: .maxSnoozes)
+        try c.encode(breakThroughFocus, forKey: .breakThroughFocus)
+        try c.encode(workMinutes, forKey: .workMinutes)
     }
 }
 
@@ -105,8 +134,42 @@ public struct CompletionUndo: Codable, Hashable, Sendable {
     public var snoozeCount: Int
     public var lastCompletedAt: Date?
     public var completedAt: Date?
+    public var startedAt: Date?
     /// The completion this snapshot can undo.
     public var completedAtMoment: Date
+
+    public init(
+        startAt: Date,
+        snoozedUntil: Date?,
+        snoozeCount: Int,
+        lastCompletedAt: Date?,
+        completedAt: Date?,
+        startedAt: Date?,
+        completedAtMoment: Date
+    ) {
+        self.startAt = startAt
+        self.snoozedUntil = snoozedUntil
+        self.snoozeCount = snoozeCount
+        self.lastCompletedAt = lastCompletedAt
+        self.completedAt = completedAt
+        self.startedAt = startedAt
+        self.completedAtMoment = completedAtMoment
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case startAt, snoozedUntil, snoozeCount, lastCompletedAt, completedAt, startedAt, completedAtMoment
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        startAt = try c.decode(Date.self, forKey: .startAt)
+        snoozedUntil = try c.decodeIfPresent(Date.self, forKey: .snoozedUntil)
+        snoozeCount = try c.decode(Int.self, forKey: .snoozeCount)
+        lastCompletedAt = try c.decodeIfPresent(Date.self, forKey: .lastCompletedAt)
+        completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
+        startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
+        completedAtMoment = try c.decode(Date.self, forKey: .completedAtMoment)
+    }
 }
 
 public struct NagTask: Codable, Hashable, Identifiable, Sendable {
@@ -127,6 +190,8 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
     public var completedAt: Date?
     public var lastCompletedAt: Date?
     public var snoozedUntil: Date?
+    /// When the current occurrence was started.
+    public var startedAt: Date?
     /// Snoozes used on the current occurrence.
     public var snoozeCount: Int
     public var completionUndo: CompletionUndo?
@@ -166,6 +231,7 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         self.completedAt = nil
         self.lastCompletedAt = nil
         self.snoozedUntil = nil
+        self.startedAt = nil
         self.snoozeCount = 0
         self.completionUndo = nil
         self.undoneCompletionAt = nil
@@ -176,7 +242,7 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, title, notes, createdAt, updatedAt, startAt, repeatRule, times, style, proof
-        case completedAt, lastCompletedAt, snoozedUntil, snoozeCount
+        case completedAt, lastCompletedAt, snoozedUntil, startedAt, snoozeCount
         case completionUndo, undoneCompletionAt
         case source, externalID, link
     }
@@ -197,6 +263,7 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
         lastCompletedAt = try c.decodeIfPresent(Date.self, forKey: .lastCompletedAt)
         snoozedUntil = try c.decodeIfPresent(Date.self, forKey: .snoozedUntil)
+        startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
         snoozeCount = try c.decode(Int.self, forKey: .snoozeCount)
         completionUndo = try c.decodeIfPresent(CompletionUndo.self, forKey: .completionUndo)
         undoneCompletionAt = try c.decodeIfPresent(Date.self, forKey: .undoneCompletionAt)

@@ -160,6 +160,7 @@ extension NagState {
             if tasks[index].startAt != task.startAt {
                 task.snoozedUntil = nil
                 task.snoozeCount = 0
+                task.startedAt = nil
             }
             tasks[index] = task
         } else {

@@ -247,6 +247,10 @@ final class MacModel {
         mutateTask(id) { _ = $0.snooze(at: .now, minutes: minutes) }
     }
 
+    func start(_ id: UUID) {
+        mutateTask(id) { $0.start(at: .now) }
+    }
+
     func reopen(_ id: UUID) {
         mutateTask(id) { $0.reopen(at: .now) }
     }
@@ -281,6 +285,12 @@ final class MacModel {
     func snoozeFromNotification(_ id: UUID, minutes: Int) async {
         reload()
         snooze(id, minutes: minutes)
+        await waitForNotificationSync()
+    }
+
+    func startFromNotification(_ id: UUID) async {
+        reload()
+        start(id)
         await waitForNotificationSync()
     }
 

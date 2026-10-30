@@ -31,6 +31,7 @@ struct TaskEditorView: View {
 
     static let intervals = [1, 2, 5, 10, 15, 30, 60]
     static let snoozeLengths = [5, 10, 15, 30, 60]
+    static let workLengths = [10, 15, 25, 30, 45, 60, 90]
 
     private var isCustom: Bool { task.repeatRule == .custom }
 
@@ -79,11 +80,14 @@ struct TaskEditorView: View {
                     Picker("Escalation", selection: $task.style.escalation) {
                         ForEach(Escalation.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
+                    Picker("Working time", selection: $task.style.workMinutes) {
+                        ForEach(Self.workLengths, id: \.self) { Text(NagFormat.minutes($0)).tag($0) }
+                    }
                     Toggle("Break through Focus", isOn: $task.style.breakThroughFocus)
                 } header: {
                     Text("Nagging")
                 } footer: {
-                    Text(task.style.escalation.explanation)
+                    Text("After you tap Started, Nag goes quiet for this long, then checks in.")
                 }
 
                 Section {

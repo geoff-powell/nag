@@ -59,6 +59,7 @@ public enum TaskMerge {
             newer.completedAt = undoneCopy.completedAt
             newer.snoozedUntil = undoneCopy.snoozedUntil
             newer.snoozeCount = undoneCopy.snoozeCount
+            newer.startedAt = undoneCopy.startedAt
             newer.completionUndo = undoneCopy.completionUndo
         } else if let olderDone = older.lastCompletedAt,
            olderDone > (newer.lastCompletedAt ?? .distantPast),
@@ -68,6 +69,7 @@ public enum TaskMerge {
             if newer.isRepeating { newer.startAt = max(newer.startAt, older.startAt) }
             newer.snoozedUntil = older.snoozedUntil
             newer.snoozeCount = older.snoozeCount
+            newer.startedAt = older.startedAt
             newer.completionUndo = older.completionUndo
         }
         return newer

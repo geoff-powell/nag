@@ -132,6 +132,8 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
         switch action {
         case NagID.Action.done:
             if let taskID { await model.completeFromNotification(taskID) }
+        case NagID.Action.started:
+            if let taskID { await model.startFromNotification(taskID) }
         case NagID.Action.snooze:
             if let taskID { await model.snoozeFromNotification(taskID) }
         case NagID.Action.undo:

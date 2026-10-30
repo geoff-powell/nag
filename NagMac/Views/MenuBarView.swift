@@ -123,11 +123,9 @@ private struct MenuNagRow: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title).fontWeight(.medium).lineLimit(2)
-                Text(task.isSnoozed(at: now)
-                    ? "Snoozed until \(task.snoozedUntil?.formatted(date: .omitted, time: .shortened) ?? "")"
-                    : "Overdue \(NagFormat.duration(now.timeIntervalSince(task.startAt)))")
+                Text(status)
                     .font(.caption)
-                    .foregroundStyle(task.isSnoozed(at: now) ? Color.indigo : Color.orange)
+                    .foregroundStyle(task.isSnoozed(at: now) ? Color.indigo : task.isStarted(at: now) ? Color.blue : Color.orange)
             }
             Spacer()
             if model.needsPhoneScan(task) {
@@ -150,8 +148,22 @@ private struct MenuNagRow: View {
                 }
                 .help("Choose a snooze length")
             }
+            if !task.isStarted(at: now) {
+                Button("Started") { model.start(task.id) }
+            }
         }
         .controlSize(.small)
+    }
+
+    private var status: String {
+        if task.isSnoozed(at: now) {
+            return "Snoozed until \(task.snoozedUntil?.formatted(date: .omitted, time: .shortened) ?? "")"
+        }
+        if task.isStarted(at: now), let startedAt = task.startedAt {
+            let checkingIn = task.isWorking(at: now) ? "" : " · checking in"
+            return "Started \(NagFormat.duration(now.timeIntervalSince(startedAt))) ago\(checkingIn)"
+        }
+        return "Overdue \(NagFormat.duration(now.timeIntervalSince(task.startAt)))"
     }
 }
 

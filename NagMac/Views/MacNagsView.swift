@@ -29,7 +29,7 @@ struct MacNagsView: View {
             }
             // Rows slide between sections however they change: here, the menu bar, a notification or the iPhone.
             .animation(.snappy(duration: 0.32), value: [groups.now, groups.later, groups.done].map { section in
-                section.map { "\($0.id)|\($0.isSnoozed(at: now))|\($0.isFinished)" }
+                section.map { "\($0.id)|\($0.isSnoozed(at: now))|\($0.isStarted(at: now))|\($0.isFinished)" }
             })
         }
         .navigationTitle("Nags")
@@ -124,6 +124,10 @@ private struct MacNagRow: View {
                 }
                 .controlSize(.small)
             }
+            if task.isOutstanding(at: now), !task.isStarted(at: now) {
+                Button("Started") { model.start(task.id) }
+                    .controlSize(.small)
+            }
         }
         .padding(.vertical, 3)
         .contentShape(Rectangle())
@@ -134,6 +138,9 @@ private struct MacNagRow: View {
                 Link("Open original", destination: link)
             }
             Button("Duplicate") { model.duplicateTask(task.id) }
+            if task.isOutstanding(at: now), !task.isStarted(at: now) {
+                Button("Started") { model.start(task.id) }
+            }
             if task.canSnooze(at: now) {
                 Menu("Snooze") {
                     ForEach(SnoozeOption.allCases, id: \.self) { option in
@@ -155,6 +162,10 @@ private struct MacNagRow: View {
         if task.isFinished, let at = task.completedAt { return "Done \(at.formatted(.relative(presentation: .named)))" }
         if task.isSnoozed(at: now), let until = task.snoozedUntil {
             return "Snoozed until \(until.formatted(date: .omitted, time: .shortened))"
+        }
+        if task.isStarted(at: now), let startedAt = task.startedAt {
+            let checkingIn = task.isWorking(at: now) ? "" : " · checking in"
+            return "Started \(NagFormat.duration(now.timeIntervalSince(startedAt))) ago\(checkingIn)"
         }
         if task.isOutstanding(at: now) {
             let overdue = now.timeIntervalSince(task.startAt)
@@ -233,11 +244,15 @@ struct MacTaskEditor: View {
                     Picker("Escalation", selection: $task.style.escalation) {
                         ForEach(Escalation.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
+                    Picker("Working time", selection: $task.style.workMinutes) {
+                        ForEach([10, 15, 25, 30, 45, 60, 90], id: \.self) { Text(NagFormat.minutes($0)).tag($0) }
+                    }
                     Toggle("Break through Focus", isOn: $task.style.breakThroughFocus)
                 } header: {
                     Text("Nagging")
                 } footer: {
-                    Text(task.style.escalation.explanation).foregroundStyle(.secondary)
+                    Text("After you tap Started, Nag goes quiet for this long, then checks in.")
+                        .foregroundStyle(.secondary)
                 }
                 Section("Snooze") {
                     Picker("Snooze for", selection: $task.style.snoozeMinutes) {
