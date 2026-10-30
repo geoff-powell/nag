@@ -17,7 +17,7 @@ public enum RepeatRule: String, Codable, CaseIterable, Sendable {
         case .daily: "Every day"
         case .weekdays: "Weekdays"
         case .weekly: "Every week"
-        case .custom: "Custom times"
+        case .custom: "Custom"
         }
     }
 }
