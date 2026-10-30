@@ -1,3 +1,4 @@
+import AppIntents
 import AppKit
 import NagKit
 @preconcurrency import UserNotifications
@@ -12,6 +13,23 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
     private lazy var nagPanel = NagPanelController(model: model)
     private lazy var blocker = AppBlocker { [weak self] app, profile in
         self?.showShield(for: app, profile: profile)
+    }
+
+    override init() {
+        super.init()
+        // Shortcuts can launch Nag to run an intent, so register before launch finishes.
+        let model = model
+        AppDependencyManager.shared.add(dependency: model)
+    }
+
+    /// Registered before launch finishes so a `nag://` link that launches Nag isn't missed.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleGetURL(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -67,6 +85,21 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
         let remaining = model.evaluate(profile, now: .now).filter { !$0.isMet }.map(\.title)
         shieldPanel.show(app: app, profile: profile, remaining: remaining) { [weak self] in
             self?.model.showUnlock(profile.id)
+        }
+    }
+
+    // MARK: - Links
+
+    @objc private func handleGetURL(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
+        guard let string = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
+              let url = URL(string: string), NagRequest.isNagURL(url)
+        else { return }
+        if let message = model.openLink(url) {
+            let alert = NSAlert()
+            alert.messageText = "Couldn't add that nag"
+            alert.informativeText = message
+            NSApp.activate()
+            alert.runModal()
         }
     }
 

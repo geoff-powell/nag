@@ -8,6 +8,12 @@ struct PresentedID: Identifiable, Hashable {
     let id: UUID
 }
 
+/// A nag from a `nag://add` link, waiting in the editor for the user to save it.
+struct IncomingDraft: Identifiable {
+    let id = UUID()
+    let draft: NagDraft
+}
+
 /// The Mac app's source of truth. Same shape as the iPhone's AppModel, plus a tick that does what
 /// DeviceActivity does on iOS: run schedules, expire timed unlocks, and auto-lock while nags are due.
 @MainActor
@@ -25,6 +31,8 @@ final class MacModel {
     private(set) var launchAtLogin = SMAppService.mainApp.status == .enabled
     var section: Section = .nags
     var unlockRequest: PresentedID?
+    /// A nag from a link, shown in the editor.
+    var incoming: IncomingDraft?
 
     var calendar: Calendar { .current }
 
@@ -156,19 +164,39 @@ final class MacModel {
     }
 
     func saveTask(_ task: NagTask) {
-        var task = task
-        task.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        task.updatedAt = .now
+        update { $0.save(task, now: .now) }
+    }
+
+    /// Adds a nag from Shortcuts or Siri, or updates the one made earlier from the same source item.
+    @discardableResult
+    func apply(_ request: NagRequest) throws(NagRequestError) -> NagDraft {
+        var result: Result<NagDraft, NagRequestError> = .failure(.missingTitle)
+        let calendar = calendar
         update { state in
-            if let index = state.tasks.firstIndex(where: { $0.id == task.id }) {
-                if state.tasks[index].startAt != task.startAt {
-                    task.snoozedUntil = nil
-                    task.snoozeCount = 0
-                }
-                state.tasks[index] = task
-            } else {
-                state.tasks.append(task)
+            do throws(NagRequestError) {
+                result = .success(try state.apply(request, now: .now, calendar: calendar))
+            } catch {
+                result = .failure(error)
             }
+        }
+        return try result.get()
+    }
+
+    /// What a `nag://add` link would save, for the editor to show before anything changes.
+    func draft(for request: NagRequest) throws(NagRequestError) -> NagDraft {
+        reload()
+        return try state.draft(for: request, now: .now, calendar: calendar)
+    }
+
+    /// Opens the editor on what a `nag://add` link describes. Returns an error message for a bad link.
+    func openLink(_ url: URL) -> String? {
+        do {
+            let request = try NagRequest(url: url, now: .now, calendar: calendar)
+            incoming = IncomingDraft(draft: try draft(for: request))
+            show(.nags)
+            return nil
+        } catch {
+            return error.localizedDescription
         }
     }
 

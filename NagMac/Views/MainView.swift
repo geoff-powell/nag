@@ -24,5 +24,8 @@ struct MainView: View {
         .sheet(item: $model.unlockRequest) { item in
             MacUnlockView(profileID: item.id)
         }
+        .sheet(item: $model.incoming) { item in
+            MacTaskEditor(draft: item.draft)
+        }
     }
 }

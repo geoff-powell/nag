@@ -28,9 +28,24 @@ struct RootView: View {
         .sheet(item: $router.proof) { item in
             TaskProofSheet(taskID: item.id)
         }
+        .sheet(item: $router.incoming) { item in
+            TaskEditorView(draft: item.draft)
+        }
+        .alert("Couldn't add that nag", isPresented: hasLinkError) {
+            Button("OK") { router.linkError = nil }
+        } message: {
+            Text(router.linkError ?? "")
+        }
         .fullScreenCover(isPresented: needsOnboarding) {
             OnboardingView()
         }
+    }
+
+    private var hasLinkError: Binding<Bool> {
+        Binding(
+            get: { router.linkError != nil },
+            set: { if !$0 { router.linkError = nil } }
+        )
     }
 
     private var needsOnboarding: Binding<Bool> {

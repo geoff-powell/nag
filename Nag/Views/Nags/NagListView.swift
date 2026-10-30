@@ -101,6 +101,11 @@ struct NagListView: View {
         }
         .listRowBackground(router.focusedTask == task.id ? Color.orange.opacity(0.15) : nil)
         .contextMenu {
+            if let link = task.link {
+                Link(destination: link) {
+                    Label("Open original", systemImage: "arrow.up.forward.app")
+                }
+            }
             Button("Duplicate", systemImage: "plus.square.on.square") {
                 withAnimation(Motion.list) { model.duplicateTask(task.id) }
             }

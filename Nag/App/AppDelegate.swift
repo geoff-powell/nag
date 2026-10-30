@@ -1,3 +1,4 @@
+import AppIntents
 import NagKit
 import UIKit
 @preconcurrency import UserNotifications
@@ -6,6 +7,13 @@ import UIKit
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     let model = UITesting.isActive ? UITesting.makeModel() : AppModel(store: .shared)
     let router = Router()
+
+    override init() {
+        super.init()
+        // Shortcuts and Siri can launch Nag in the background to run an intent, so register before launch finishes.
+        let model = model
+        AppDependencyManager.shared.add(dependency: model)
+    }
 
     func application(
         _ application: UIApplication,
