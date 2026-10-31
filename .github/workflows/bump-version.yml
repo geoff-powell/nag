@@ -1,0 +1,92 @@
+name: Bump version
+
+# Changes the app version (MARKETING_VERSION in Config/Base.xcconfig) and commits it straight to
+# main. Start it from Actions > Bump version > Run workflow.
+#
+# Pushes made with the workflow's token don't start other workflows, so Tests and Deploy don't run
+# for the bump commit on their own. Tick "deploy" to start Deploy for it (Deploy runs the tests
+# first), or let the next merge to main ship it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part to bump, or "set" to use the version below
+        type: choice
+        options: [patch, minor, major, set]
+        default: minor
+      version:
+        description: Exact version, like 1.4 or 1.4.2 (only with "set")
+        type: string
+        required: false
+      deploy:
+        description: Deploy both apps after the bump
+        type: boolean
+        default: false
+
+concurrency:
+  group: bump-version
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    name: Bump version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Change the version
+        id: bump
+        env:
+          BUMP: ${{ inputs.bump }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$BUMP" == set ]]; then
+            if [[ -z "$VERSION" ]]; then
+              echo "::error::Enter a version to use \"set\"."
+              exit 1
+            fi
+            arg="$VERSION"
+          else
+            arg="$BUMP"
+          fi
+          old="$(source scripts/lib.sh && marketing_version)"
+          new="$(scripts/bump-version.sh "$arg")"
+          echo "Version $old -> $new"
+          echo "version=$new" >> "$GITHUB_OUTPUT"
+
+      - name: Commit to main
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore: bump version to $VERSION"
+          # Main may have moved since checkout; replay the bump on top and retry a few times.
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "Pushed $(git rev-parse --short HEAD) to main."
+              exit 0
+            fi
+            echo "Push $attempt failed, rebasing on the latest main."
+            git pull --rebase origin main
+          done
+          echo "::error::Couldn't push the version bump to main."
+          exit 1
+
+      - name: Start Deploy
+        if: inputs.deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh workflow run deploy.yml --ref main -f platform=both
+          echo "Started Deploy for main. Follow it under Actions > Deploy."
