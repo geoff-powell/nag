@@ -244,6 +244,10 @@ struct MacTaskEditor: View {
                     Picker("Escalation", selection: $task.style.escalation) {
                         ForEach(Escalation.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
+                    Picker("Tone", selection: $task.style.tone) {
+                        Text("Use the default").tag(NagTone?.none)
+                        ForEach(NagTone.allCases, id: \.self) { Text($0.label).tag(NagTone?.some($0)) }
+                    }
                     Picker("Working time", selection: $task.style.workMinutes) {
                         ForEach([10, 15, 25, 30, 45, 60, 90], id: \.self) { Text(NagFormat.minutes($0)).tag($0) }
                     }

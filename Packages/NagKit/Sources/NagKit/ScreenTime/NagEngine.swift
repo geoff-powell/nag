@@ -28,7 +28,12 @@ public enum NagEngine {
             allowRepeating: state.settings.screenTimeApproved || !state.settings.quietHours.isActive,
             calendar: calendar
         )
-        let plan = planner.plan(tasks: state.tasks, quietHours: state.settings.quietHours, now: now)
+        let plan = planner.plan(
+            tasks: state.tasks,
+            quietHours: state.settings.quietHours,
+            tone: state.settings.nagTone,
+            now: now
+        )
 
         if state.settings.screenTimeApproved {
             ActivityScheduler.sync(state: state, plan: plan, now: now, calendar: calendar)

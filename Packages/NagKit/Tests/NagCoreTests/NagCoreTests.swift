@@ -503,6 +503,173 @@ struct PlannerTests {
     }
 }
 
+@Suite struct NagToneTests {
+    let planner = NagPlanner(calendar: Fixture.calendar)
+
+    @Test func standardToneKeepsTheCurrentWordingVerbatim() {
+        #expect(NagMessages.body(
+            title: "Laundry",
+            notes: "",
+            number: 3,
+            overdue: 0,
+            tone: .standard
+        ) == "Nag #3. Now's a good moment.")
+        #expect(NagMessages.repeatingBody(
+            title: "Laundry",
+            tier: 3,
+            tone: .standard
+        ) == "I'm not going to stop until this is done.")
+    }
+
+    @Test func everyToneOffersANextStepAtEveryTier() {
+        let overdue: [TimeInterval] = [0, 15 * 60, 60 * 60, 3 * 60 * 60]
+        for tone in NagTone.allCases {
+            #expect(!NagMessages.body(
+                title: "Laundry",
+                notes: "",
+                number: 1,
+                overdue: 0,
+                tone: tone
+            ).isEmpty)
+            for (tier, duration) in overdue.enumerated() {
+                #expect(!NagMessages.body(
+                    title: "Laundry",
+                    notes: "",
+                    number: tier + 2,
+                    overdue: duration,
+                    tone: tone
+                ).isEmpty)
+                #expect(!NagMessages.repeatingBody(
+                    title: "Laundry",
+                    tier: tier,
+                    tone: tone
+                ).isEmpty)
+            }
+        }
+    }
+
+    @Test func gentleIsNeverThreatening() {
+        let gentle = NagMessages.repeatingBody(title: "Laundry", tier: 3, tone: .gentle)
+        #expect(!gentle.lowercased().contains("not going to stop"))
+        #expect(!gentle.lowercased().contains("excuses"))
+        #expect(gentle != NagMessages.repeatingBody(title: "Laundry", tier: 3, tone: .standard))
+        #expect(gentle != NagMessages.repeatingBody(title: "Laundry", tier: 3, tone: .pushy))
+    }
+
+    @Test func pushyIsBlunter() {
+        let pushy = NagMessages.repeatingBody(title: "Laundry", tier: 3, tone: .pushy)
+        #expect(pushy == "Do it now. One tiny step, no excuses.")
+        #expect(pushy != NagMessages.repeatingBody(title: "Laundry", tier: 3, tone: .standard))
+        #expect(pushy != NagMessages.repeatingBody(title: "Laundry", tier: 3, tone: .gentle))
+    }
+
+    @Test func perNagToneOverridesTheGlobalTone() {
+        let task = NagTask(
+            title: "Laundry",
+            startAt: Fixture.date(28, 8),
+            style: NagStyle(tone: .pushy),
+            now: Fixture.date(28, 7)
+        )
+        let plan = planner.plan(
+            tasks: [task],
+            quietHours: QuietHours(),
+            tone: .gentle,
+            now: Fixture.date(28, 12)
+        )
+        #expect(plan.notifications.first?.body
+            == NagMessages.repeatingBody(title: task.title, tier: 3, tone: .pushy))
+    }
+
+    @Test func toneChangesTheContentKey() {
+        let task = NagTask(
+            title: "Laundry",
+            startAt: Fixture.date(28, 8),
+            now: Fixture.date(28, 7)
+        )
+        let gentle = planner.plan(
+            tasks: [task],
+            quietHours: QuietHours(),
+            tone: .gentle,
+            now: Fixture.date(28, 9)
+        )
+        let pushy = planner.plan(
+            tasks: [task],
+            quietHours: QuietHours(),
+            tone: .pushy,
+            now: Fixture.date(28, 9)
+        )
+        #expect(gentle.notifications.first?.identifier != pushy.notifications.first?.identifier)
+    }
+
+    @Test func tierBoundariesAreUnchangedByTone() {
+        let overdue: [TimeInterval] = [0, 899, 900, 3_599, 3_600, 10_799, 10_800]
+        for tone in NagTone.allCases {
+            #expect(overdue.map(NagMessages.tier(overdue:)) == [0, 0, 1, 1, 2, 2, 3])
+            #expect(overdue.map(NagMessages.nextTierChange(overdue:))
+                == [900, 900, 3_600, 3_600, 10_800, 10_800, nil])
+            #expect(!NagMessages.repeatingBody(title: "Laundry", tier: 0, tone: tone).isEmpty)
+        }
+    }
+
+    @Test func unknownToneRawValueDecodesAsNoOverride() throws {
+        let data = Data("""
+        {
+          "intervalMinutes": 15,
+          "escalation": "gentle",
+          "snoozeMinutes": 10,
+          "maxSnoozes": 3,
+          "breakThroughFocus": true,
+          "workMinutes": 30,
+          "tone": "sarcastic"
+        }
+        """.utf8)
+        let style = try JSONDecoder().decode(NagStyle.self, from: data)
+        #expect(style.tone == nil)
+    }
+
+    @Test func syncedTasksSurviveAnUnknownTone() throws {
+        let synced = SyncedTasks(tasks: [NagTask(title: "Laundry")])
+        var json = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(synced)) as? [String: Any]
+        )
+        var tasks = try #require(json["tasks"] as? [[String: Any]])
+        var style = try #require(tasks[0]["style"] as? [String: Any])
+        style["tone"] = "sarcastic"
+        tasks[0]["style"] = style
+        json["tasks"] = tasks
+
+        let decoded = try JSONDecoder().decode(
+            SyncedTasks.self,
+            from: JSONSerialization.data(withJSONObject: json)
+        )
+        #expect(decoded.tasks.count == 1)
+        #expect(decoded.tasks.first?.style.tone == nil)
+    }
+
+    @Test func settingsDecodeWithoutNagTone() throws {
+        let settings = AppSettings(nagTone: .pushy)
+        var json = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(settings)) as? [String: Any]
+        )
+        json.removeValue(forKey: "nagTone")
+        let decoded = try JSONDecoder().decode(
+            AppSettings.self,
+            from: JSONSerialization.data(withJSONObject: json)
+        )
+        #expect(decoded.nagTone == .standard)
+    }
+
+    @Test func toneAlsoAppliesToCheckInWording() {
+        let gentle = NagMessages.checkInRepeatingBody(title: "Laundry", tone: .gentle)
+        let standard = NagMessages.checkInRepeatingBody(title: "Laundry", tone: .standard)
+        let pushy = NagMessages.checkInRepeatingBody(title: "Laundry", tone: .pushy)
+        #expect(gentle != standard)
+        #expect(pushy != standard)
+        #expect(gentle.lowercased().contains("small next step"))
+        #expect(pushy.lowercased().contains("next step"))
+    }
+}
+
 struct LockTests {
     let calendar = Fixture.calendar
 
