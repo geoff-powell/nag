@@ -42,6 +42,7 @@ final class MacModel {
 
     @ObservationIgnored private var changeObservation: SharedStore.ChangeObservation?
     @ObservationIgnored private var cloudSync: CloudTaskSync?
+    @ObservationIgnored private var quietHoursSync: QuietHoursSync?
     @ObservationIgnored private var tickTask: Task<Void, Never>?
     @ObservationIgnored private var notificationTask: Task<Void, Never>?
     @ObservationIgnored private var lastNotificationSync = Date.distantPast
@@ -65,6 +66,14 @@ final class MacModel {
         }
         cloudSync = cloud
         cloud.start()
+        let quietHours = QuietHoursSync(store: store) { [weak self] in
+            Task { @MainActor in
+                self?.reload()
+                self?.syncNotifications()
+            }
+        }
+        quietHoursSync = quietHours
+        quietHours.start()
 
         tickTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -117,11 +126,15 @@ final class MacModel {
     }
 
     func update(_ change: (inout NagState) -> Void) {
+        let previousQuietHours = state.settings.syncedQuietHours
         state = store.update { state in
             change(&state)
             return state
         }
         cloudSync?.reconcile()
+        if state.settings.syncedQuietHours != previousQuietHours {
+            quietHoursSync?.reconcile()
+        }
         tick()
         syncNotifications()
     }

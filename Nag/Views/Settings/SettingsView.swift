@@ -38,10 +38,10 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle("Quiet hours", isOn: settingBinding(\.quietHours.enabled))
+                    Toggle("Quiet hours", isOn: quietHoursBinding(\.enabled))
                     if model.state.settings.quietHours.enabled {
-                        DatePicker("From", selection: minuteBinding(\.quietHours.startMinute), displayedComponents: .hourAndMinute)
-                        DatePicker("Until", selection: minuteBinding(\.quietHours.endMinute), displayedComponents: .hourAndMinute)
+                        DatePicker("From", selection: minuteBinding(\.startMinute), displayedComponents: .hourAndMinute)
+                        DatePicker("Until", selection: minuteBinding(\.endMinute), displayedComponents: .hourAndMinute)
                     }
                 } footer: {
                     Text("No nags during quiet hours. Anything still due picks up again when they end.")
@@ -154,15 +154,28 @@ struct SettingsView: View {
         )
     }
 
-    private func minuteBinding(_ keyPath: WritableKeyPath<AppSettings, Int>) -> Binding<Date> {
+    private func quietHoursBinding<Value>(_ keyPath: WritableKeyPath<QuietHours, Value>) -> Binding<Value> {
+        Binding(
+            get: { model.state.settings.quietHours[keyPath: keyPath] },
+            set: { value in
+                var quietHours = model.state.settings.quietHours
+                quietHours[keyPath: keyPath] = value
+                model.updateSettings { $0.setQuietHours(quietHours, at: .now) }
+            }
+        )
+    }
+
+    private func minuteBinding(_ keyPath: WritableKeyPath<QuietHours, Int>) -> Binding<Date> {
         Binding(
             get: {
-                let minute = model.state.settings[keyPath: keyPath]
+                let minute = model.state.settings.quietHours[keyPath: keyPath]
                 return model.calendar.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: .now) ?? .now
             },
             set: { date in
                 let parts = model.calendar.dateComponents([.hour, .minute], from: date)
-                model.updateSettings { $0[keyPath: keyPath] = (parts.hour ?? 0) * 60 + (parts.minute ?? 0) }
+                var quietHours = model.state.settings.quietHours
+                quietHours[keyPath: keyPath] = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+                model.updateSettings { $0.setQuietHours(quietHours, at: .now) }
             }
         )
     }
