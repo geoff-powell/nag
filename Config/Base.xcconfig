@@ -13,7 +13,7 @@ CODE_SIGN_STYLE = Automatic
 NAG_MAC_CODE_SIGN_STYLE = Automatic
 NAG_MAC_SIGN_IDENTITY = Apple Development
 NAG_MAC_PROFILE =
-MARKETING_VERSION = 1.0
+MARKETING_VERSION = 1.0.1
 // Release scripts override this with a timestamp, so every upload gets a new build number.
 CURRENT_PROJECT_VERSION = 1
 // Nag only hashes key IDs (SHA-256), which is exempt from export compliance.
