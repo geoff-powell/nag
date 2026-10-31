@@ -101,7 +101,7 @@ Set `NAG_GITHUB_USER=geoff-powell` if more than one GitHub account is signed in 
 
 ### Deploying from GitHub Actions
 
-Two workflows:
+Three workflows:
 
 - **Tests** (`.github/workflows/tests.yml`) runs the unit tests and builds both apps on every push to
   `main` and every pull request.
@@ -112,6 +112,12 @@ Two workflows:
   `main`, once Tests passes for that commit. You can also start it from **Actions → Deploy → Run
   workflow** (pick iPhone, Mac or both), or push a tag like `v1.0` to deploy both under that tag.
   Manual and tag deploys run the tests first.
+- **Bump version** (`.github/workflows/bump-version.yml`) changes the app version
+  (`MARKETING_VERSION` in `Config/Base.xcconfig`) and commits it to `main`. Start it from
+  **Actions → Bump version → Run workflow** and pick patch, minor or major, or "set" with an exact
+  version. Commits made by a workflow don't start Tests or Deploy, so tick **deploy** to ship the
+  new version straight away; otherwise the next merge to `main` ships it. To bump locally instead,
+  run `scripts/bump-version.sh minor` (or `patch`, `major`, `1.4.2`) and commit the change.
 
 CI can't sign in to Xcode, so Deploy needs these repository secrets. Set them once with `gh`
 from this folder, signed in as the repo owner (`gh auth switch --user geoff-powell`).
