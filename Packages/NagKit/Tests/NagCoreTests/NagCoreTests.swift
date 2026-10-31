@@ -112,6 +112,62 @@ struct TaskRuleTests {
     }
 }
 
+struct SnoozeOptionTests {
+    @Test func snoozeOptionsHaveStableActionIdentifiers() {
+        #expect(SnoozeOption.short.actionIdentifier == "SNOOZE_5")
+        #expect(SnoozeOption.medium.actionIdentifier == "SNOOZE_15")
+        #expect(SnoozeOption.long.actionIdentifier == "SNOOZE_60")
+        for option in SnoozeOption.allCases {
+            #expect(SnoozeOption.option(forAction: option.actionIdentifier) == option)
+        }
+        #expect(SnoozeOption.option(forAction: "SNOOZE") == nil)
+        #expect(SnoozeOption.option(forAction: "UNKNOWN") == nil)
+    }
+
+    @Test func explicitSnoozeUsesTheChosenLength() {
+        let now = Fixture.date(28, 9)
+        var task = NagTask(title: "Laundry", startAt: Fixture.date(28, 8), now: Fixture.date(28, 8))
+        let snoozed = task.snooze(at: now, minutes: 60)
+        #expect(snoozed)
+        #expect(task.snoozedUntil == Fixture.date(28, 10))
+    }
+
+    @Test func explicitSnoozeStillCountsAgainstTheLimit() {
+        let now = Fixture.date(28, 9)
+        var task = NagTask(
+            title: "Laundry",
+            startAt: Fixture.date(28, 8),
+            style: NagStyle(maxSnoozes: 2),
+            now: Fixture.date(28, 8)
+        )
+        let first = task.snooze(at: now, minutes: 5)
+        let second = task.snooze(at: now, minutes: 15)
+        let third = task.snooze(at: now, minutes: 60)
+        #expect(first)
+        #expect(second)
+        #expect(!third)
+        #expect(task.snoozesLeft == 0)
+    }
+
+    @Test func explicitSnoozeIsRefusedBeforeTheNagStarts() {
+        var task = NagTask(title: "Later", startAt: Fixture.date(28, 18), now: Fixture.date(28, 8))
+        let snoozed = task.snooze(at: Fixture.date(28, 9), minutes: 60)
+        #expect(!snoozed)
+    }
+
+    @Test func defaultSnoozeStillUsesTheStyleLength() {
+        let now = Fixture.date(28, 9)
+        let style = NagStyle(snoozeMinutes: 15)
+        var defaultTask = NagTask(title: "Laundry", startAt: Fixture.date(28, 8), style: style, now: Fixture.date(28, 8))
+        var explicitTask = defaultTask
+        let defaultSnoozed = defaultTask.snooze(at: now)
+        let explicitSnoozed = explicitTask.snooze(at: now, minutes: style.snoozeMinutes)
+        #expect(defaultSnoozed)
+        #expect(explicitSnoozed)
+        #expect(defaultTask.snoozedUntil == explicitTask.snoozedUntil)
+    }
+}
+
 struct CustomScheduleTests {
     let calendar = Fixture.calendar
 

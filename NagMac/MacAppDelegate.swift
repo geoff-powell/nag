@@ -125,11 +125,15 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
     }
 
     private func handle(action: String, taskID: UUID?, profileID: UUID?) async {
+        if let option = SnoozeOption.option(forAction: action), let taskID {
+            await model.snoozeFromNotification(taskID, minutes: option.minutes)
+            return
+        }
         switch action {
         case NagID.Action.done:
             if let taskID { await model.completeFromNotification(taskID) }
         case NagID.Action.snooze:
-            if let taskID { model.snooze(taskID) }
+            if let taskID { await model.snoozeFromNotification(taskID) }
         case NagID.Action.undo:
             if let taskID { await model.undoFromNotification(taskID) }
         default:

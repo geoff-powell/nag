@@ -52,7 +52,7 @@ final class NagPanelController {
             needsPhoneScan: model.needsPhoneScan,
             onDone: { [weak self] id in self?.model.complete(id) },
             onUndo: { [weak self] id in self?.model.undo(id) },
-            onSnooze: { [weak self] id in self?.model.snooze(id) },
+            onSnooze: { [weak self] id, minutes in self?.model.snooze(id, minutes: minutes) },
             onToggle: { [weak self] in self?.toggleCollapsed() },
             onOpen: { [weak self] in self?.model.show(.nags) }
         )
@@ -82,7 +82,7 @@ private struct NagPanelView: View {
     let needsPhoneScan: (NagTask) -> Bool
     let onDone: (UUID) -> Void
     let onUndo: (UUID) -> Void
-    let onSnooze: (UUID) -> Void
+    let onSnooze: (UUID, Int) -> Void
     let onToggle: () -> Void
     let onOpen: () -> Void
 
@@ -139,7 +139,11 @@ private struct NagPanelView: View {
                                 .tint(.green)
                         }
                         if task.canSnooze(at: now) {
-                            Button("Snooze \(task.style.snoozeMinutes)m") { onSnooze(task.id) }
+                            Menu("Snooze") {
+                                ForEach(SnoozeOption.allCases, id: \.self) { option in
+                                    Button(option.label) { onSnooze(task.id, option.minutes) }
+                                }
+                            }
                         }
                     }
                     .controlSize(.small)

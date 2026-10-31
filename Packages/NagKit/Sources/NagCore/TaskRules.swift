@@ -200,8 +200,13 @@ extension NagTask {
 
     @discardableResult
     public mutating func snooze(at now: Date) -> Bool {
+        snooze(at: now, minutes: style.snoozeMinutes)
+    }
+
+    @discardableResult
+    public mutating func snooze(at now: Date, minutes: Int) -> Bool {
         guard canSnooze(at: now) else { return false }
-        snoozedUntil = now.addingTimeInterval(TimeInterval(style.snoozeMinutes * 60))
+        snoozedUntil = now.addingTimeInterval(TimeInterval(minutes * 60))
         snoozeCount += 1
         updatedAt = now
         return true
