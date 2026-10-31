@@ -59,6 +59,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             if let taskID { await model.completeFromNotification(taskID) }
         case NagID.Action.snooze:
             if let taskID { await model.snoozeFromNotification(taskID) }
+        case NagID.Action.undo:
+            if let taskID { await model.undoFromNotification(taskID) }
         case NagID.Action.scan:
             if let taskID { router.showProof(for: taskID) }
         case UNNotificationDefaultActionIdentifier:

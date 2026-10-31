@@ -154,6 +154,13 @@ final class AppModel {
         mutateTask(id) { $0.reopen(at: .now) }
     }
 
+    func undo(_ id: UUID) {
+        reload()
+        guard state.task(id)?.canUndoCompletion(at: .now) == true else { return }
+        mutateTask(id) { _ = $0.undoCompletion(at: .now) }
+        NotificationSync.removeDeliveredUndoFollowUp(taskID: id)
+    }
+
     func snooze(_ id: UUID) {
         mutateTask(id) { _ = $0.snooze(at: .now) }
     }
@@ -169,6 +176,14 @@ final class AppModel {
     func completeFromNotification(_ id: UUID) async {
         reload()
         complete(id)
+        await waitForSync()
+        if let task = state.task(id), task.canUndoCompletion(at: .now) {
+            await NotificationSync.undoFollowUp(task: task)
+        }
+    }
+
+    func undoFromNotification(_ id: UUID) async {
+        undo(id)
         await waitForSync()
     }
 

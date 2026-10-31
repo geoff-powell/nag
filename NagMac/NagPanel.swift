@@ -25,11 +25,15 @@ final class NagPanelController {
 
     func refresh(now: Date) {
         let state = model.state
-        let nagging = state.tasks
-            .filter { $0.isNagging(at: now) }
+        let visible = state.tasks
+            .filter { task in
+                task.isNagging(at: now) || (task.canUndoCompletion(at: now)
+                    && task.completionUndo.map { now.timeIntervalSince($0.completedAtMoment) < NagUndo.toastDuration } == true)
+            }
             .sorted { $0.startAt < $1.startAt }
+        let naggingCount = visible.filter { $0.isNagging(at: now) }.count
 
-        guard Self.isEnabled, !nagging.isEmpty, !state.settings.quietHours.contains(now, calendar: model.calendar) else {
+        guard Self.isEnabled, !visible.isEmpty, !state.settings.quietHours.contains(now, calendar: model.calendar) else {
             panel.orderOut(nil)
             collapsedAt = nil
             return
@@ -41,11 +45,13 @@ final class NagPanelController {
         }
 
         let view = NagPanelView(
-            tasks: nagging,
+            tasks: visible,
+            naggingCount: naggingCount,
             now: now,
             collapsed: collapsedAt != nil,
             needsPhoneScan: model.needsPhoneScan,
             onDone: { [weak self] id in self?.model.complete(id) },
+            onUndo: { [weak self] id in self?.model.undo(id) },
             onSnooze: { [weak self] id in self?.model.snooze(id) },
             onToggle: { [weak self] in self?.toggleCollapsed() },
             onOpen: { [weak self] in self?.model.show(.nags) }
@@ -70,10 +76,12 @@ final class NagPanelController {
 
 private struct NagPanelView: View {
     let tasks: [NagTask]
+    let naggingCount: Int
     let now: Date
     let collapsed: Bool
     let needsPhoneScan: (NagTask) -> Bool
     let onDone: (UUID) -> Void
+    let onUndo: (UUID) -> Void
     let onSnooze: (UUID) -> Void
     let onToggle: () -> Void
     let onOpen: () -> Void
@@ -82,7 +90,7 @@ private struct NagPanelView: View {
         Group {
             if collapsed {
                 Button(action: onToggle) {
-                    Label(tasks.count == 1 ? "1 nag due" : "\(tasks.count) nags due", systemImage: "bell.badge.fill")
+                    Label(pillTitle, systemImage: "bell.badge.fill")
                         .font(.callout.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
@@ -99,7 +107,7 @@ private struct NagPanelView: View {
     private var expanded: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("Still waiting on you", systemImage: "bell.badge.fill")
+                Label(naggingCount > 0 ? "Still waiting on you" : "Marked done", systemImage: "bell.badge.fill")
                     .font(.headline)
                     .foregroundStyle(.orange)
                 Spacer()
@@ -119,7 +127,10 @@ private struct NagPanelView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     HStack {
-                        if needsPhoneScan(task) {
+                        if task.canUndoCompletion(at: now) {
+                            Button("Undo") { onUndo(task.id) }
+                                .buttonStyle(.borderedProminent)
+                        } else if needsPhoneScan(task) {
                             Label("Scan on iPhone to finish", systemImage: "iphone.radiowaves.left.and.right")
                                 .font(.caption)
                         } else {
@@ -147,9 +158,15 @@ private struct NagPanelView: View {
     }
 
     private func subtitle(for task: NagTask) -> String {
+        if task.canUndoCompletion(at: now) { return "Marked done" }
         let overdue = now.timeIntervalSince(task.startAt)
         let late = overdue < 60 ? "Due now" : "Overdue \(NagFormat.duration(overdue))"
         guard let left = task.snoozesLeft else { return late }
         return left == 0 ? "\(late) · no snoozes left" : "\(late) · \(left) snooze\(left == 1 ? "" : "s") left"
+    }
+
+    private var pillTitle: String {
+        guard naggingCount > 0 else { return "Undo completion" }
+        return naggingCount == 1 ? "1 nag due" : "\(naggingCount) nags due"
     }
 }

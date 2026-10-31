@@ -98,6 +98,17 @@ public enum CompletionProof: Codable, Hashable, Sendable {
     }
 }
 
+/// The state a nag was in just before it was completed, so the completion can be undone.
+public struct CompletionUndo: Codable, Hashable, Sendable {
+    public var startAt: Date
+    public var snoozedUntil: Date?
+    public var snoozeCount: Int
+    public var lastCompletedAt: Date?
+    public var completedAt: Date?
+    /// The completion this snapshot can undo.
+    public var completedAtMoment: Date
+}
+
 public struct NagTask: Codable, Hashable, Identifiable, Sendable {
     public var id: UUID
     public var title: String
@@ -118,6 +129,8 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
     public var snoozedUntil: Date?
     /// Snoozes used on the current occurrence.
     public var snoozeCount: Int
+    public var completionUndo: CompletionUndo?
+    public var undoneCompletionAt: Date?
     /// What made this nag outside Nag, such as "Calendar", "Muse" or "Claude". `nil` for nags made in Nag.
     public var source: String?
     /// The source's own ID for the item, so sending the same item again updates this nag instead of
@@ -154,6 +167,8 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         self.lastCompletedAt = nil
         self.snoozedUntil = nil
         self.snoozeCount = 0
+        self.completionUndo = nil
+        self.undoneCompletionAt = nil
         self.source = source
         self.externalID = externalID
         self.link = link
@@ -162,6 +177,7 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, title, notes, createdAt, updatedAt, startAt, repeatRule, times, style, proof
         case completedAt, lastCompletedAt, snoozedUntil, snoozeCount
+        case completionUndo, undoneCompletionAt
         case source, externalID, link
     }
 
@@ -182,6 +198,8 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         lastCompletedAt = try c.decodeIfPresent(Date.self, forKey: .lastCompletedAt)
         snoozedUntil = try c.decodeIfPresent(Date.self, forKey: .snoozedUntil)
         snoozeCount = try c.decode(Int.self, forKey: .snoozeCount)
+        completionUndo = try c.decodeIfPresent(CompletionUndo.self, forKey: .completionUndo)
+        undoneCompletionAt = try c.decodeIfPresent(Date.self, forKey: .undoneCompletionAt)
         source = try c.decodeIfPresent(String.self, forKey: .source)
         externalID = try c.decodeIfPresent(String.self, forKey: .externalID)
         link = try c.decodeIfPresent(URL.self, forKey: .link)

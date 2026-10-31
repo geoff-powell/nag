@@ -6,6 +6,7 @@ struct NagListView: View {
     @Environment(Router.self) private var router
     @State private var editor: TaskEditorItem?
     @State private var feedbackTick = 0
+    @State private var undo: (taskID: UUID, deadline: Date)?
 
     var body: some View {
         NavigationStack {
@@ -22,6 +23,28 @@ struct NagListView: View {
             }
             .sheet(item: $editor) { item in
                 TaskEditorView(task: item.task)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let undo {
+                HStack(spacing: 10) {
+                    Text("Marked done")
+                    Button("Undo") {
+                        withAnimation(Motion.list) {
+                            model.undo(undo.taskID)
+                            self.undo = nil
+                        }
+                    }
+                    .fontWeight(.semibold)
+                    Button("Dismiss", systemImage: "xmark") { self.undo = nil }
+                        .labelStyle(.iconOnly)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.regularMaterial, in: Capsule())
+                .shadow(radius: 4, y: 2)
+                .padding(.bottom, 12)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
     }
@@ -126,11 +149,19 @@ struct NagListView: View {
             return
         }
         guard fromSwipe else {
-            withAnimation(Motion.list) { model.complete(task.id) }
+            withAnimation(Motion.list) {
+                model.complete(task.id)
+                showUndo(for: task.id)
+            }
             return
         }
         feedbackTick += 1
-        afterSwipeCloses { withAnimation(Motion.list) { model.complete(task.id) } }
+        afterSwipeCloses {
+            withAnimation(Motion.list) {
+                model.complete(task.id)
+                showUndo(for: task.id)
+            }
+        }
     }
 
     private func snooze(_ task: NagTask) {
@@ -147,6 +178,16 @@ struct NagListView: View {
         Task { @MainActor in
             try? await Task.sleep(for: Motion.swipeSettle)
             change()
+        }
+    }
+
+    private func showUndo(for taskID: UUID) {
+        let deadline = Date.now.addingTimeInterval(NagUndo.toastDuration)
+        undo = (taskID, deadline)
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(NagUndo.toastDuration))
+            guard undo?.deadline == deadline else { return }
+            withAnimation(Motion.list) { undo = nil }
         }
     }
 }

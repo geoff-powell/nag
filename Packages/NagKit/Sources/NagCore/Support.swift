@@ -14,6 +14,7 @@ public enum NagID {
         public static let proof = "NAG_PROOF"
         public static let proofNoSnooze = "NAG_PROOF_NO_SNOOZE"
         public static let alert = "NAG_ALERT"
+        public static let undo = "NAG_UNDO"
 
         public static func forTask(_ task: NagTask, canSnooze: Bool) -> String {
             switch (task.proof.keyID != nil, canSnooze) {
@@ -29,6 +30,7 @@ public enum NagID {
         public static let done = "DONE"
         public static let snooze = "SNOOZE"
         public static let scan = "SCAN"
+        public static let undo = "UNDO"
     }
 
     public enum UserInfo {

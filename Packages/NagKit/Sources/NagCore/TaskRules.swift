@@ -1,5 +1,10 @@
 import Foundation
 
+public enum NagUndo {
+    public static let window: TimeInterval = 10 * 60
+    public static let toastDuration: TimeInterval = 5
+}
+
 extension RepeatRule {
     func includes(weekday: Int, anchorWeekday: Int) -> Bool {
         switch self {
@@ -145,6 +150,14 @@ extension NagTask {
     }
 
     public mutating func complete(at now: Date, calendar: Calendar) {
+        let undo = CompletionUndo(
+            startAt: startAt,
+            snoozedUntil: snoozedUntil,
+            snoozeCount: snoozeCount,
+            lastCompletedAt: lastCompletedAt,
+            completedAt: completedAt,
+            completedAtMoment: now
+        )
         lastCompletedAt = now
         snoozedUntil = nil
         snoozeCount = 0
@@ -157,6 +170,27 @@ extension NagTask {
         } else {
             completedAt = now
         }
+        completionUndo = undo
+    }
+
+    public func canUndoCompletion(at now: Date) -> Bool {
+        guard let completionUndo else { return false }
+        let elapsed = now.timeIntervalSince(completionUndo.completedAtMoment)
+        return elapsed > -60 && elapsed < NagUndo.window
+    }
+
+    @discardableResult
+    public mutating func undoCompletion(at now: Date) -> Bool {
+        guard let undo = completionUndo, canUndoCompletion(at: now) else { return false }
+        startAt = undo.startAt
+        snoozedUntil = undo.snoozedUntil
+        snoozeCount = undo.snoozeCount
+        lastCompletedAt = undo.lastCompletedAt
+        completedAt = undo.completedAt
+        undoneCompletionAt = undo.completedAtMoment
+        updatedAt = now
+        completionUndo = nil
+        return true
     }
 
     public mutating func reopen(at now: Date) {

@@ -461,6 +461,151 @@ struct LockTests {
     }
 }
 
+struct UndoTests {
+    let calendar = Fixture.calendar
+
+    @Test func undoRestoresARepeatingNagsOccurrence() {
+        var task = NagTask(title: "Meds", startAt: Fixture.date(28, 8), repeatRule: .daily, now: Fixture.date(27, 8))
+        _ = task.snooze(at: Fixture.date(28, 8, 5))
+        task.lastCompletedAt = Fixture.date(27, 9)
+        let before = task
+
+        task.complete(at: Fixture.date(28, 9), calendar: calendar)
+        #expect(task.startAt == Fixture.date(29, 8))
+        let didUndo = task.undoCompletion(at: Fixture.date(28, 9, 1))
+        #expect(didUndo)
+        #expect(task.startAt == before.startAt)
+        #expect(task.snoozedUntil == before.snoozedUntil)
+        #expect(task.snoozeCount == before.snoozeCount)
+        #expect(task.lastCompletedAt == before.lastCompletedAt)
+    }
+
+    @Test func undoRestoresAOneOffCompletion() {
+        var task = NagTask(title: "Taxes", startAt: Fixture.date(28, 8), now: Fixture.date(27, 8))
+        task.complete(at: Fixture.date(28, 9), calendar: calendar)
+        let didUndo = task.undoCompletion(at: Fixture.date(28, 9, 1))
+        #expect(didUndo)
+        #expect(task.completedAt == nil)
+        #expect(!task.isFinished)
+    }
+
+    @Test func undoExpiresAfterTheWindow() {
+        var task = NagTask(title: "Taxes", startAt: Fixture.date(28, 8), now: Fixture.date(27, 8))
+        task.complete(at: Fixture.date(28, 9), calendar: calendar)
+        let completed = task
+        let tooLate = Fixture.date(28, 9).addingTimeInterval(NagUndo.window + 1)
+        #expect(!task.canUndoCompletion(at: tooLate))
+        let didUndo = task.undoCompletion(at: tooLate)
+        #expect(!didUndo)
+        #expect(task == completed)
+    }
+
+    @Test func undoAllowsSmallNegativeElapsedTimeFromClockSkew() {
+        var task = NagTask(title: "Taxes", startAt: Fixture.date(28, 8), now: Fixture.date(27, 8))
+        task.complete(at: Fixture.date(28, 9), calendar: calendar)
+
+        #expect(task.canUndoCompletion(at: Fixture.date(28, 9).addingTimeInterval(-59)))
+        #expect(!task.canUndoCompletion(at: Fixture.date(28, 9).addingTimeInterval(-60)))
+    }
+
+    @Test func onlyTheMostRecentCompletionCanBeUndone() {
+        var task = NagTask(title: "Meds", startAt: Fixture.date(28, 8), repeatRule: .daily, now: Fixture.date(27, 8))
+        task.complete(at: Fixture.date(28, 9), calendar: calendar)
+        let didUndoFirst = task.undoCompletion(at: Fixture.date(28, 9, 1))
+        #expect(didUndoFirst)
+        let beforeSecondCompletion = task
+        task.complete(at: Fixture.date(28, 9, 2), calendar: calendar)
+        let didUndoSecond = task.undoCompletion(at: Fixture.date(28, 9, 3))
+        #expect(didUndoSecond)
+        #expect(task.startAt == beforeSecondCompletion.startAt)
+        #expect(task.lastCompletedAt == beforeSecondCompletion.lastCompletedAt)
+        let didUndoThird = task.undoCompletion(at: Fixture.date(28, 9, 4))
+        #expect(!didUndoThird)
+    }
+
+    @Test func undoneNagIsNotSatisfiedForLocks() {
+        var repeating = NagTask(title: "Meds", startAt: Fixture.date(28, 8), repeatRule: .daily, now: Fixture.date(27, 8))
+        repeating.complete(at: Fixture.date(28, 9), calendar: calendar)
+        let didUndoRepeating = repeating.undoCompletion(at: Fixture.date(28, 9, 1))
+        #expect(didUndoRepeating)
+        #expect(!repeating.isSatisfied(at: Fixture.date(28, 10), calendar: calendar))
+
+        var oneOff = NagTask(title: "Taxes", startAt: Fixture.date(28, 8), now: Fixture.date(27, 8))
+        oneOff.complete(at: Fixture.date(28, 9), calendar: calendar)
+        let didUndoOneOff = oneOff.undoCompletion(at: Fixture.date(28, 9, 1))
+        #expect(didUndoOneOff)
+        #expect(!oneOff.isSatisfied(at: Fixture.date(28, 10), calendar: calendar))
+    }
+
+    @Test func mergeDoesNotRestoreAnUndoneCompletion_localFirst() {
+        let (completed, undone) = completedAndUndoneCopies()
+        let merged = TaskMerge.merge(undone, completed)
+        #expect(merged.lastCompletedAt == nil)
+        #expect(merged.completedAt == nil)
+        #expect(merged.startAt == Fixture.date(28, 8))
+    }
+
+    @Test func mergeDoesNotRestoreAnUndoneCompletion_remoteFirst() {
+        let (completed, undone) = completedAndUndoneCopies()
+        let merged = TaskMerge.merge(completed, undone)
+        #expect(merged.lastCompletedAt == nil)
+        #expect(merged.completedAt == nil)
+        #expect(merged.startAt == Fixture.date(28, 8))
+    }
+
+    @Test func mergeStillRestoresALaterCompletionAfterAnUndo() {
+        let (_, undone) = completedAndUndoneCopies()
+        var laterCompletion = undone
+        laterCompletion.complete(at: Fixture.date(28, 9, 5), calendar: calendar)
+        var staleEdit = undone
+        staleEdit.title = "Edited elsewhere"
+        staleEdit.updatedAt = Fixture.date(28, 9, 6)
+
+        let merged = TaskMerge.merge(laterCompletion, staleEdit)
+        #expect(merged.lastCompletedAt == Fixture.date(28, 9, 5))
+        #expect(merged.startAt == Fixture.date(29, 8))
+    }
+
+    @Test func undoSurvivesALaterStaleEditOnTheOtherDevice() {
+        let (completed, undone) = completedAndUndoneCopies()
+        var staleEdit = completed
+        staleEdit.title = "Edited elsewhere"
+        staleEdit.notes = "Keep this newer edit"
+        staleEdit.updatedAt = Fixture.date(28, 9, 2)
+
+        for merged in [TaskMerge.merge(undone, staleEdit), TaskMerge.merge(staleEdit, undone)] {
+            #expect(merged.title == staleEdit.title)
+            #expect(merged.notes == staleEdit.notes)
+            #expect(merged.startAt == undone.startAt)
+            #expect(merged.lastCompletedAt == undone.lastCompletedAt)
+            #expect(merged.completedAt == undone.completedAt)
+            #expect(merged.snoozedUntil == undone.snoozedUntil)
+            #expect(merged.snoozeCount == undone.snoozeCount)
+            #expect(merged.completionUndo == undone.completionUndo)
+            #expect(merged.undoneCompletionAt == undone.undoneCompletionAt)
+        }
+    }
+
+    @Test func undoFieldsDecodeFromOlderPayloads() throws {
+        let task = NagTask(title: "Old", startAt: Fixture.date(28, 9), repeatRule: .daily, now: Fixture.date(27, 9))
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(task)) as! [String: Any]
+        json.removeValue(forKey: "completionUndo")
+        json.removeValue(forKey: "undoneCompletionAt")
+        let decoded = try JSONDecoder().decode(NagTask.self, from: JSONSerialization.data(withJSONObject: json))
+        #expect(decoded == task)
+        #expect(decoded.completionUndo == nil)
+        #expect(decoded.undoneCompletionAt == nil)
+    }
+
+    private func completedAndUndoneCopies() -> (completed: NagTask, undone: NagTask) {
+        var completed = NagTask(title: "Meds", startAt: Fixture.date(28, 8), repeatRule: .daily, now: Fixture.date(27, 8))
+        completed.complete(at: Fixture.date(28, 9), calendar: calendar)
+        var undone = completed
+        _ = undone.undoCompletion(at: Fixture.date(28, 9, 1))
+        return (completed, undone)
+    }
+}
+
 struct TaskMergeTests {
     let now = Fixture.date(28, 12)
 
@@ -485,6 +630,7 @@ struct TaskMergeTests {
         let merged = TaskMerge.merge(phone, mac)
         #expect(merged.isFinished)
         #expect(merged.snoozedUntil == nil)
+        #expect(merged.completionUndo == phone.completionUndo)
         #expect(TaskMerge.merge(mac, phone) == merged)
     }
 

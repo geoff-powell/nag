@@ -19,6 +19,7 @@ public enum NotificationSync {
         let done = UNNotificationAction(identifier: NagID.Action.done, title: "Done", options: [])
         let snooze = UNNotificationAction(identifier: NagID.Action.snooze, title: "Snooze", options: [])
         let scan = UNNotificationAction(identifier: NagID.Action.scan, title: "Scan to finish", options: [.foreground])
+        let undo = UNNotificationAction(identifier: NagID.Action.undo, title: "Undo", options: [])
         func category(_ identifier: String, _ actions: [UNNotificationAction]) -> UNNotificationCategory {
             UNNotificationCategory(identifier: identifier, actions: actions, intentIdentifiers: [], options: [])
         }
@@ -28,6 +29,7 @@ public enum NotificationSync {
             category(NagID.Category.proof, [scan, snooze]),
             category(NagID.Category.proofNoSnooze, [scan]),
             category(NagID.Category.alert, []),
+            category(NagID.Category.undo, [undo]),
         ])
     }
 
@@ -115,6 +117,28 @@ public enum NotificationSync {
     /// Shows a notification right away. Tapping one with a `profileID` opens that lock's unlock screen.
     public static func alert(title: String, body: String, profileID: UUID? = nil) async {
         try? await UNUserNotificationCenter.current().add(alertRequest(title: title, body: body, profileID: profileID))
+    }
+
+    public static func undoFollowUp(task: NagTask) async {
+        let content = UNMutableNotificationContent()
+        content.title = "Marked \(task.title) done"
+        content.body = "Tap Undo if that was a mistake."
+        content.sound = .default
+        content.categoryIdentifier = NagID.Category.undo
+        content.interruptionLevel = .active
+        content.userInfo = [NagID.UserInfo.taskID: task.id.uuidString]
+        let request = UNNotificationRequest(
+            identifier: "nag.undo.\(task.id.uuidString)",
+            content: content,
+            trigger: nil
+        )
+        try? await UNUserNotificationCenter.current().add(request)
+    }
+
+    public static func removeDeliveredUndoFollowUp(taskID: UUID) {
+        UNUserNotificationCenter.current().removeDeliveredNotifications(
+            withIdentifiers: ["nag.undo.\(taskID.uuidString)"]
+        )
     }
 
     /// Callback variant for extension entry points that must answer synchronously.
