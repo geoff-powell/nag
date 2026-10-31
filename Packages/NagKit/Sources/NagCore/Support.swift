@@ -160,7 +160,30 @@ extension NagTime {
 extension NagTask {
     /// "Every day", or each custom time: "9:00 AM Mon, Wed, Fri · 11:00 PM Tue, Thu".
     public var repeatLabel: String {
-        guard repeatRule == .custom, !times.isEmpty else { return repeatRule.label }
-        return times.sorted { $0.minute < $1.minute }.map(\.label).joined(separator: " · ")
+        switch repeatRule {
+        case .custom where !times.isEmpty:
+            times.sorted { $0.minute < $1.minute }.map(\.label).joined(separator: " · ")
+        case .everyNDays:
+            repeatEvery == 1 ? "Every day" : "Every \(repeatEvery) days"
+        case .monthly:
+            "Monthly on the \(monthDay.ordinal)"
+        default:
+            repeatRule.label
+        }
+    }
+}
+
+private extension Int {
+    var ordinal: String {
+        let suffix = switch self % 100 {
+        case 11...13: "th"
+        default: switch self % 10 {
+            case 1: "st"
+            case 2: "nd"
+            case 3: "rd"
+            default: "th"
+            }
+        }
+        return "\(self)\(suffix)"
     }
 }

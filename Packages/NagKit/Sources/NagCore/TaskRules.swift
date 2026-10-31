@@ -8,7 +8,7 @@ public enum NagUndo {
 extension RepeatRule {
     func includes(weekday: Int, anchorWeekday: Int) -> Bool {
         switch self {
-        case .never, .custom: false
+        case .never, .custom, .everyNDays, .monthly: false
         case .daily: true
         case .weekdays: (2...6).contains(weekday)
         case .weekly: weekday == anchorWeekday
@@ -18,7 +18,7 @@ extension RepeatRule {
     /// The first occurrence strictly after `date`, at `anchor`'s time of day (and weekday, for weekly).
     /// `.custom` occurrences come from the nag's times instead; see `NagTask.occurrence(after:calendar:)`.
     public func occurrence(after date: Date, anchor: Date, calendar: Calendar) -> Date? {
-        guard self != .never, self != .custom else { return nil }
+        guard self != .never, self != .custom, self != .everyNDays, self != .monthly else { return nil }
         let hour = calendar.component(.hour, from: anchor)
         let minute = calendar.component(.minute, from: anchor)
         let anchorWeekday = calendar.component(.weekday, from: anchor)
@@ -31,6 +31,44 @@ extension RepeatRule {
             }
             guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { return nil }
             day = next
+        }
+        return nil
+    }
+
+    func everyNDaysOccurrence(after date: Date, anchor: Date, every: Int, calendar: Calendar) -> Date? {
+        guard every >= 1 else { return nil }
+        let anchorDay = calendar.startOfDay(for: anchor)
+        let dateDay = calendar.startOfDay(for: date)
+        let difference = calendar.dateComponents([.day], from: anchorDay, to: dateDay).day ?? 0
+        var offset = difference > 0 ? ((difference + every - 1) / every) * every : 0
+        let hour = calendar.component(.hour, from: anchor)
+        let minute = calendar.component(.minute, from: anchor)
+
+        func candidate(_ offset: Int) -> Date? {
+            calendar.date(byAdding: .day, value: offset, to: anchorDay)
+                .flatMap { calendar.date(bySettingHour: hour, minute: minute, second: 0, of: $0) }
+        }
+        guard let first = candidate(offset) else { return nil }
+        if first > date { return first }
+        offset += every
+        return candidate(offset)
+    }
+
+    func monthlyOccurrence(after date: Date, anchor: Date, monthDay: Int, calendar: Calendar) -> Date? {
+        guard (1...31).contains(monthDay) else { return nil }
+        let anchorParts = calendar.dateComponents([.era, .year, .month], from: anchor)
+        guard let anchorMonth = calendar.date(from: anchorParts) else { return nil }
+        let hour = calendar.component(.hour, from: anchor)
+        let minute = calendar.component(.minute, from: anchor)
+        for offset in 0...24 {
+            guard let month = calendar.date(byAdding: .month, value: offset, to: anchorMonth),
+                  let days = calendar.range(of: .day, in: .month, for: month)?.count else { continue }
+            var parts = calendar.dateComponents([.era, .year, .month], from: month)
+            parts.day = min(monthDay, days)
+            parts.hour = hour
+            parts.minute = minute
+            parts.second = 0
+            if let candidate = calendar.date(from: parts), candidate > date { return candidate }
         }
         return nil
     }
@@ -75,6 +113,8 @@ extension NagTask {
             notes: notes,
             startAt: startAt,
             repeatRule: repeatRule,
+            repeatEvery: repeatEvery,
+            monthDay: monthDay,
             times: times.map { NagTime(minute: $0.minute, weekdays: $0.weekdays) },
             style: style,
             proof: proof,
@@ -86,15 +126,26 @@ extension NagTask {
 
     /// A custom-schedule nag needs at least one time, and every time needs at least one day.
     public var hasValidSchedule: Bool {
-        repeatRule != .custom || (!times.isEmpty && times.allSatisfy(\.isValid))
+        switch repeatRule {
+        case .custom: !times.isEmpty && times.allSatisfy(\.isValid)
+        case .everyNDays: repeatEvery >= 1
+        case .monthly: (1...31).contains(monthDay)
+        default: true
+        }
     }
 
     /// The next occurrence strictly after `date`.
     public func occurrence(after date: Date, calendar: Calendar) -> Date? {
-        if repeatRule == .custom {
-            return times.compactMap { $0.occurrence(after: date, calendar: calendar) }.min()
+        switch repeatRule {
+        case .custom:
+            times.compactMap { $0.occurrence(after: date, calendar: calendar) }.min()
+        case .everyNDays:
+            repeatRule.everyNDaysOccurrence(after: date, anchor: startAt, every: repeatEvery, calendar: calendar)
+        case .monthly:
+            repeatRule.monthlyOccurrence(after: date, anchor: startAt, monthDay: monthDay, calendar: calendar)
+        default:
+            repeatRule.occurrence(after: date, anchor: startAt, calendar: calendar)
         }
-        return repeatRule.occurrence(after: date, anchor: startAt, calendar: calendar)
     }
 
     /// Custom-schedule nags take their start from their times. When the schedule is new or has

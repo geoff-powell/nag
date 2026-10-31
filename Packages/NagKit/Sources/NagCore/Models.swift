@@ -10,6 +10,8 @@ public enum RepeatRule: String, Codable, CaseIterable, Sendable {
     case weekly
     /// Comes back at each of the nag's `times`, such as 9 AM Mon, Wed, Fri and 11 PM Tue, Thu.
     case custom
+    case everyNDays
+    case monthly
 
     public var label: String {
         switch self {
@@ -18,7 +20,23 @@ public enum RepeatRule: String, Codable, CaseIterable, Sendable {
         case .weekdays: "Weekdays"
         case .weekly: "Every week"
         case .custom: "Custom"
+        case .everyNDays: "Every N days"
+        case .monthly: "Monthly"
         }
+    }
+
+    /// A value shipped builds can decode from the legacy `repeatRule` key.
+    public var legacyRawValue: String {
+        switch self {
+        case .everyNDays, .monthly: RepeatRule.daily.rawValue
+        default: rawValue
+        }
+    }
+
+    /// Unknown future rules fall back safely instead of making an entire synced task list undecodable.
+    public init(from decoder: any Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(String.self)
+        self = RepeatRule(rawValue: rawValue) ?? .daily
     }
 }
 
@@ -189,6 +207,10 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
     /// Start of the current occurrence. Nagging begins here.
     public var startAt: Date
     public var repeatRule: RepeatRule
+    /// Number of days between occurrences for `.everyNDays`.
+    public var repeatEvery: Int
+    /// Preferred day of month for `.monthly`; short months use their last day.
+    public var monthDay: Int
     /// When a `.custom` nag comes due. Ignored by the other repeat rules.
     public var times: [NagTime]
     public var style: NagStyle
@@ -217,6 +239,8 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         notes: String = "",
         startAt: Date = .now,
         repeatRule: RepeatRule = .never,
+        repeatEvery: Int = 2,
+        monthDay: Int? = nil,
         times: [NagTime] = [],
         style: NagStyle = NagStyle(),
         proof: CompletionProof = .none,
@@ -232,6 +256,8 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         self.updatedAt = now
         self.startAt = startAt
         self.repeatRule = repeatRule
+        self.repeatEvery = min(max(repeatEvery, 1), 365)
+        self.monthDay = min(max(monthDay ?? Calendar.current.component(.day, from: startAt), 1), 31)
         self.times = times
         self.style = style
         self.proof = proof
@@ -248,7 +274,7 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, notes, createdAt, updatedAt, startAt, repeatRule, times, style, proof
+        case id, title, notes, createdAt, updatedAt, startAt, repeatRule, repeatKind, repeatEvery, monthDay, times, style, proof
         case completedAt, lastCompletedAt, snoozedUntil, startedAt, snoozeCount
         case completionUndo, undoneCompletionAt
         case source, externalID, link
@@ -263,7 +289,14 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         updatedAt = try c.decode(Date.self, forKey: .updatedAt)
         startAt = try c.decode(Date.self, forKey: .startAt)
-        repeatRule = try c.decode(RepeatRule.self, forKey: .repeatRule)
+        repeatRule = try c.decodeIfPresent(RepeatRule.self, forKey: .repeatKind)
+            ?? c.decode(RepeatRule.self, forKey: .repeatRule)
+        repeatEvery = min(max(try c.decodeIfPresent(Int.self, forKey: .repeatEvery) ?? 2, 1), 365)
+        // A fixed calendar, so devices in different time zones derive the same day from the same payload.
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        let defaultMonthDay = utc.component(.day, from: startAt)
+        monthDay = min(max(try c.decodeIfPresent(Int.self, forKey: .monthDay) ?? defaultMonthDay, 1), 31)
         times = try c.decodeIfPresent([NagTime].self, forKey: .times) ?? []
         style = try c.decode(NagStyle.self, forKey: .style)
         proof = try c.decode(CompletionProof.self, forKey: .proof)
@@ -277,6 +310,34 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         source = try c.decodeIfPresent(String.self, forKey: .source)
         externalID = try c.decodeIfPresent(String.self, forKey: .externalID)
         link = try c.decodeIfPresent(URL.self, forKey: .link)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(title, forKey: .title)
+        try c.encode(notes, forKey: .notes)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(startAt, forKey: .startAt)
+        // Legacy-safe: shipped builds only know the original five values in `repeatRule`.
+        try c.encode(repeatRule.legacyRawValue, forKey: .repeatRule)
+        try c.encode(repeatRule.rawValue, forKey: .repeatKind)
+        try c.encode(repeatEvery, forKey: .repeatEvery)
+        try c.encode(monthDay, forKey: .monthDay)
+        try c.encode(times, forKey: .times)
+        try c.encode(style, forKey: .style)
+        try c.encode(proof, forKey: .proof)
+        try c.encodeIfPresent(completedAt, forKey: .completedAt)
+        try c.encodeIfPresent(lastCompletedAt, forKey: .lastCompletedAt)
+        try c.encodeIfPresent(snoozedUntil, forKey: .snoozedUntil)
+        try c.encodeIfPresent(startedAt, forKey: .startedAt)
+        try c.encode(snoozeCount, forKey: .snoozeCount)
+        try c.encodeIfPresent(completionUndo, forKey: .completionUndo)
+        try c.encodeIfPresent(undoneCompletionAt, forKey: .undoneCompletionAt)
+        try c.encodeIfPresent(source, forKey: .source)
+        try c.encodeIfPresent(externalID, forKey: .externalID)
+        try c.encodeIfPresent(link, forKey: .link)
     }
 }
 

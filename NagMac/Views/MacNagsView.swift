@@ -233,6 +233,17 @@ struct MacTaskEditor: View {
                     Picker("Repeat", selection: $task.repeatRule) {
                         ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
+                    if task.repeatRule == .everyNDays {
+                        Stepper("Every \(task.repeatEvery) days", value: $task.repeatEvery, in: 1...365)
+                    }
+                    if task.repeatRule == .monthly {
+                        Picker("On day", selection: $task.monthDay) {
+                            ForEach(1...31, id: \.self) { Text("\($0)").tag($0) }
+                        }
+                        Text("Months without that day use their last day.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 if isCustom {
                     timesSection

@@ -19,6 +19,8 @@ public struct NagRequest: Hashable, Sendable {
     public var startAt: Date?
     /// Defaults to `.custom` when `times` are given, otherwise to `.never` for a new nag.
     public var repeatRule: RepeatRule?
+    public var repeatEvery: Int?
+    public var monthDay: Int?
     public var times: [NagTime]?
     public var intervalMinutes: Int?
     public var escalation: Escalation?
@@ -37,6 +39,8 @@ public struct NagRequest: Hashable, Sendable {
         notes: String? = nil,
         startAt: Date? = nil,
         repeatRule: RepeatRule? = nil,
+        repeatEvery: Int? = nil,
+        monthDay: Int? = nil,
         times: [NagTime]? = nil,
         intervalMinutes: Int? = nil,
         escalation: Escalation? = nil,
@@ -51,6 +55,8 @@ public struct NagRequest: Hashable, Sendable {
         self.notes = notes
         self.startAt = startAt
         self.repeatRule = repeatRule
+        self.repeatEvery = repeatEvery
+        self.monthDay = monthDay
         self.times = times
         self.intervalMinutes = intervalMinutes
         self.escalation = escalation
@@ -120,6 +126,8 @@ extension NagState {
         if let startAt = request.startAt { task.startAt = startAt }
         if let times = request.times { task.times = times }
         if let rule = request.repeatRule ?? (request.times == nil ? nil : .custom) { task.repeatRule = rule }
+        if let every = request.repeatEvery { task.repeatEvery = every }
+        if let day = request.monthDay { task.monthDay = day }
         if let minutes = request.intervalMinutes { task.style.intervalMinutes = minutes }
         if let escalation = request.escalation { task.style.escalation = escalation }
         if let minutes = request.snoozeMinutes { task.style.snoozeMinutes = minutes }
@@ -174,6 +182,12 @@ extension NagRequest {
     func validateRanges() throws(NagRequestError) {
         if let minutes = intervalMinutes, !(1...1440).contains(minutes) {
             throw .invalidValue(parameter: "nag interval", value: "\(minutes)")
+        }
+        if let repeatEvery, !(1...365).contains(repeatEvery) {
+            throw .invalidValue(parameter: "every days", value: "\(repeatEvery)")
+        }
+        if let monthDay, !(1...31).contains(monthDay) {
+            throw .invalidValue(parameter: "month day", value: "\(monthDay)")
         }
         if let minutes = snoozeMinutes, !(1...1440).contains(minutes) {
             throw .invalidValue(parameter: "snooze length", value: "\(minutes)")
