@@ -122,6 +122,19 @@ struct NagRequestTests {
         #expect(state.tasks[0].snoozedUntil == nil)
     }
 
+    @Test func editingTheStartTimeClearsStarted() {
+        var state = NagState()
+        var task = NagTask(title: "Started", startAt: Fixture.date(28, 9), now: Fixture.date(28, 8))
+        task.start(at: Fixture.date(28, 9, 30))
+        state.tasks = [task]
+
+        task.startAt = Fixture.date(29, 9)
+        let saved = state.save(task, now: now)
+
+        #expect(saved.startedAt == nil)
+        #expect(state.tasks[0].startedAt == nil)
+    }
+
     @Test func duplicateDropsTheExternalID() {
         let task = NagTask(title: "From Muse", source: "Muse", externalID: "card", link: URL(string: "https://example.com"), now: now)
         let copy = task.duplicate(now: now)

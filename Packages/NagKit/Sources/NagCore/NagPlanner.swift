@@ -124,41 +124,48 @@ public struct NagPlanner: Sendable {
         for task in tasks {
             guard let start = task.nagStart else { continue }
             let base = TimeInterval(max(1, task.style.intervalMinutes) * 60)
+            let checkIn = task.isStarted(at: now)
+            if checkIn, let workingUntil = task.workingUntil() { considerWake(workingUntil) }
             let category = NagID.Category.forTask(task, canSnooze: (task.snoozesLeft ?? 1) > 0)
-            let contentKey = StableHash.hex("\(task.title)|\(task.notes)|\(category)|\(task.style.breakThroughFocus)")
+            let contentKey = StableHash.hex("\(task.title)|\(task.notes)|\(category)|\(task.style.breakThroughFocus)|\(checkIn)")
             let prefix = "\(NagID.nagNotificationPrefix)\(task.id.uuidString)|"
 
             if start <= now, allowRepeating, !quietNow {
                 let overdue = now.timeIntervalSince(task.startAt)
-                let seconds = Int(task.style.escalation.interval(base: base, overdue: overdue).rounded())
-                let tier = NagMessages.tier(overdue: overdue)
+                let escalation = checkIn ? Escalation.steady : task.style.escalation
+                let seconds = Int(escalation.interval(base: base, overdue: overdue).rounded())
+                let tier = checkIn ? 0 : NagMessages.tier(overdue: overdue)
                 repeating.append(PlannedNotification(
                     identifier: "\(prefix)every|\(seconds)|\(tier)|\(contentKey)",
                     taskID: task.id,
                     trigger: .every(seconds: seconds),
                     title: task.title,
-                    body: NagMessages.repeatingBody(title: task.title, tier: tier),
+                    body: checkIn
+                        ? NagMessages.checkInRepeatingBody(title: task.title)
+                        : NagMessages.repeatingBody(title: task.title, tier: tier),
                     category: category,
                     timeSensitive: task.style.breakThroughFocus
                 ))
-                if let tightening = task.style.escalation.nextTightening(base: base, overdue: overdue) {
+                if let tightening = escalation.nextTightening(base: base, overdue: overdue) {
                     considerWake(task.startAt.addingTimeInterval(tightening))
                 }
-                if let tierChange = NagMessages.nextTierChange(overdue: overdue) {
+                if !checkIn, let tierChange = NagMessages.nextTierChange(overdue: overdue) {
                     considerWake(task.startAt.addingTimeInterval(tierChange))
                 }
                 continue
             }
 
             considerWake(start)
-            for (date, number) in fireDates(for: task, from: start, base: base, quietHours: quietHours, now: now, until: until) {
+            for (date, number) in fireDates(for: task, from: start, base: base, checkIn: checkIn, quietHours: quietHours, now: now, until: until) {
                 let overdue = date.timeIntervalSince(task.startAt)
                 oneOffs.append((date, PlannedNotification(
                     identifier: "\(prefix)\(Int(date.timeIntervalSince1970))|\(contentKey)",
                     taskID: task.id,
                     trigger: .at(date),
                     title: task.title,
-                    body: NagMessages.body(title: task.title, notes: task.notes, number: number, overdue: overdue),
+                    body: checkIn
+                        ? NagMessages.checkInBody(title: task.title, number: number, working: date.timeIntervalSince(start))
+                        : NagMessages.body(title: task.title, notes: task.notes, number: number, overdue: overdue),
                     category: category,
                     timeSensitive: task.style.breakThroughFocus
                 )))
@@ -184,6 +191,7 @@ public struct NagPlanner: Sendable {
         for task: NagTask,
         from start: Date,
         base: TimeInterval,
+        checkIn: Bool = false,
         quietHours: QuietHours,
         now: Date,
         until: Date
@@ -200,7 +208,8 @@ public struct NagPlanner: Sendable {
                 result.append((fire, number))
             }
             let overdue = fire.timeIntervalSince(task.startAt)
-            next = fire.addingTimeInterval(task.style.escalation.interval(base: base, overdue: overdue))
+            let escalation = checkIn ? Escalation.steady : task.style.escalation
+            next = fire.addingTimeInterval(escalation.interval(base: base, overdue: overdue))
         }
         return result
     }
@@ -261,5 +270,18 @@ public enum NagMessages {
         case 2: "Overdue. This takes less time than ignoring me."
         default: "I'm not going to stop until this is done."
         }
+    }
+
+    public static func checkInBody(title: String, number: Int, working: TimeInterval) -> String {
+        let lines = [
+            "Still on it? Nudge when you're done.",
+            "How's it going? Mark it done when it is.",
+            "A gentle check-in. Keep going when you're ready.",
+        ]
+        return lines[number % lines.count]
+    }
+
+    public static func checkInRepeatingBody(title: String) -> String {
+        "How's it going? Mark it done when it is."
     }
 }

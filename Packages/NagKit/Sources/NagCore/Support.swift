@@ -28,6 +28,7 @@ public enum NagID {
 
     public enum Action {
         public static let done = "DONE"
+        public static let started = "STARTED"
         public static let snooze = "SNOOZE"
         public static let snooze5 = "SNOOZE_5"
         public static let snooze15 = "SNOOZE_15"

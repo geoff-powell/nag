@@ -103,6 +103,10 @@ struct NagRow: View {
         if task.isSnoozed(at: now), let until = task.snoozedUntil {
             return "Snoozed until \(until.formatted(date: .omitted, time: .shortened))"
         }
+        if task.isStarted(at: now), let startedAt = task.startedAt {
+            let checkingIn = task.isWorking(at: now) ? "" : " · checking in"
+            return "Started \(NagFormat.duration(now.timeIntervalSince(startedAt))) ago\(checkingIn)"
+        }
         if task.isOutstanding(at: now) {
             let overdue = now.timeIntervalSince(task.startAt)
             let snoozes = task.snoozesLeft.map { $0 == 0 ? " · no snoozes left" : " · \($0) snooze\($0 == 1 ? "" : "s") left" } ?? ""
@@ -124,11 +128,13 @@ struct NagRow: View {
 
     private var statusSymbol: String {
         if task.isSnoozed(at: now) { return "zzz" }
+        if task.isStarted(at: now) { return "play.circle" }
         return task.isOutstanding(at: now) ? "bell.fill" : "clock"
     }
 
     private var statusColor: Color {
         if task.isSnoozed(at: now) { return .indigo }
+        if task.isStarted(at: now) { return .blue }
         return task.isOutstanding(at: now) ? .orange : .secondary
     }
 }

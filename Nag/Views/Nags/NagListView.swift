@@ -121,6 +121,12 @@ struct NagListView: View {
                 }
                 .tint(.green)
             }
+            if task.isOutstanding(at: now), !task.isStarted(at: now) {
+                Button { model.start(task.id) } label: {
+                    Label("Started", systemImage: "play.circle")
+                }
+                .tint(.blue)
+            }
         }
         .swipeActions(edge: .trailing) {
             if task.canSnooze(at: now) {
@@ -144,6 +150,9 @@ struct NagListView: View {
             }
             Button("Duplicate", systemImage: "plus.square.on.square") {
                 withAnimation(Motion.list) { model.duplicateTask(task.id) }
+            }
+            if task.isOutstanding(at: now), !task.isStarted(at: now) {
+                Button("Started", systemImage: "play.circle") { model.start(task.id) }
             }
             if task.canSnooze(at: now) {
                 Menu("Snooze", systemImage: "zzz") {

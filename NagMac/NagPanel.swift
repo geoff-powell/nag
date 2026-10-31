@@ -52,6 +52,7 @@ final class NagPanelController {
             needsPhoneScan: model.needsPhoneScan,
             onDone: { [weak self] id in self?.model.complete(id) },
             onUndo: { [weak self] id in self?.model.undo(id) },
+            onStart: { [weak self] id in self?.model.start(id) },
             onSnooze: { [weak self] id, minutes in self?.model.snooze(id, minutes: minutes) },
             onToggle: { [weak self] in self?.toggleCollapsed() },
             onOpen: { [weak self] in self?.model.show(.nags) }
@@ -82,6 +83,7 @@ private struct NagPanelView: View {
     let needsPhoneScan: (NagTask) -> Bool
     let onDone: (UUID) -> Void
     let onUndo: (UUID) -> Void
+    let onStart: (UUID) -> Void
     let onSnooze: (UUID, Int) -> Void
     let onToggle: () -> Void
     let onOpen: () -> Void
@@ -138,6 +140,9 @@ private struct NagPanelView: View {
                                 .buttonStyle(.borderedProminent)
                                 .tint(.green)
                         }
+                        if task.isOutstanding(at: now), !task.isStarted(at: now) {
+                            Button("Started") { onStart(task.id) }
+                        }
                         if task.canSnooze(at: now) {
                             Menu("Snooze") {
                                 ForEach(SnoozeOption.allCases, id: \.self) { option in
@@ -163,6 +168,10 @@ private struct NagPanelView: View {
 
     private func subtitle(for task: NagTask) -> String {
         if task.canUndoCompletion(at: now) { return "Marked done" }
+        if task.isStarted(at: now), let startedAt = task.startedAt {
+            let checkingIn = task.isWorking(at: now) ? "" : " · checking in"
+            return "Started \(NagFormat.duration(now.timeIntervalSince(startedAt))) ago\(checkingIn)"
+        }
         let overdue = now.timeIntervalSince(task.startAt)
         let late = overdue < 60 ? "Due now" : "Overdue \(NagFormat.duration(overdue))"
         guard let left = task.snoozesLeft else { return late }
