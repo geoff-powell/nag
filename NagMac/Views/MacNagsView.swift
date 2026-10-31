@@ -208,6 +208,26 @@ struct MacTaskEditor: View {
     var body: some View {
         VStack(spacing: 0) {
             Form {
+                Section("Start from") {
+                    HStack(alignment: .top) {
+                        ForEach(NagPreset.all) { preset in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Button {
+                                    preset.apply(to: &task, keys: model.state.keys, now: .now, calendar: .current)
+                                    limitSnoozes = task.style.maxSnoozes != nil
+                                } label: {
+                                    Label(preset.name, systemImage: preset.symbol)
+                                }
+                                .buttonStyle(.bordered)
+                                Text(preset.summary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
                 Section {
                     TextField("What needs doing?", text: $task.title)
                     TextField("Notes, or the first tiny step", text: $task.notes, axis: .vertical)

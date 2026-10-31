@@ -38,6 +38,31 @@ struct TaskEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Start from") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(alignment: .top, spacing: 12) {
+                            ForEach(NagPreset.all) { preset in
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Button {
+                                        withAnimation(Motion.list) {
+                                            preset.apply(to: &task, keys: model.state.keys, now: .now, calendar: .current)
+                                            limitSnoozes = task.style.maxSnoozes != nil
+                                        }
+                                    } label: {
+                                        Label(preset.name, systemImage: preset.symbol)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    Text(preset.summary)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .frame(maxWidth: 150, alignment: .leading)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Section {
                     TextField("What needs doing?", text: $task.title)
                         .font(.headline)

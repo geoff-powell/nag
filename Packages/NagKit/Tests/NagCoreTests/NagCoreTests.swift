@@ -30,6 +30,124 @@ enum DSTFixture {
     }
 }
 
+@Suite struct NagPresetTests {
+    let calendar = Fixture.calendar
+
+    @Test func allPresetsAreListed() {
+        #expect(NagPreset.all.count == 4)
+    }
+
+    @Test func everyPresetHasAUniqueID() {
+        #expect(Set(NagPreset.all.map(\.id)).count == NagPreset.all.count)
+    }
+
+    @Test func applyingAPresetKeepsTitleNotesAndIdentity() {
+        let id = UUID()
+        let createdAt = Fixture.date(28, 7)
+        let link = URL(string: "https://example.com/task")!
+        var task = NagTask(
+            id: id,
+            title: "Take medication",
+            notes: "With food",
+            source: "Calendar",
+            externalID: "event-1",
+            link: link,
+            now: createdAt
+        )
+        NagPreset.medication.apply(to: &task, keys: [], now: Fixture.date(28, 8), calendar: calendar)
+        #expect(task.id == id)
+        #expect(task.title == "Take medication")
+        #expect(task.notes == "With food")
+        #expect(task.createdAt == createdAt)
+        #expect(task.source == "Calendar")
+        #expect(task.externalID == "event-1")
+        #expect(task.link == link)
+        #expect(task.updatedAt == Fixture.date(28, 8))
+    }
+
+    @Test func applyingAPresetLeavesTheScheduleUntouched() {
+        var task = NagTask(
+            title: "Water plants",
+            startAt: Fixture.date(28, 11),
+            repeatRule: .monthly,
+            repeatEvery: 17,
+            monthDay: 31,
+            times: [NagTime(minute: 11 * 60, weekdays: [2, 5])]
+        )
+        let schedule = (task.repeatRule, task.times, task.repeatEvery, task.monthDay, task.startAt)
+        NagPreset.chore.apply(to: &task, keys: [], now: Fixture.date(28, 8), calendar: calendar)
+        #expect(task.repeatRule == schedule.0)
+        #expect(task.times == schedule.1)
+        #expect(task.repeatEvery == schedule.2)
+        #expect(task.monthDay == schedule.3)
+        #expect(task.startAt == schedule.4)
+    }
+
+    @Test func applyingAPresetKeepsSnoozeLengthFocusWorkMinutesAndTone() {
+        let style = NagStyle(
+            snoozeMinutes: 60,
+            maxSnoozes: 9,
+            breakThroughFocus: false,
+            workMinutes: 90,
+            tone: .pushy
+        )
+        var task = NagTask(title: "Laundry", style: style)
+        NagPreset.someday.apply(to: &task, keys: [], now: Fixture.date(28, 8), calendar: calendar)
+        #expect(task.style.snoozeMinutes == 60)
+        #expect(task.style.breakThroughFocus == false)
+        #expect(task.style.workMinutes == 90)
+        #expect(task.style.tone == .pushy)
+    }
+
+    @Test func medicationUsesAScanKeyWhenOneExists() {
+        let first = UnlockKey(name: "Pill bottle", kind: .code, fingerprint: "first")
+        let second = UnlockKey(name: "Backup", kind: .nfc, fingerprint: "second")
+        var task = NagTask(title: "Medication")
+        NagPreset.medication.apply(to: &task, keys: [first, second], now: Fixture.date(28, 8), calendar: calendar)
+        #expect(task.proof == .scanKey(first.id))
+    }
+
+    @Test func medicationFallsBackToNoProofWithoutAKey() {
+        var task = NagTask(title: "Medication", proof: .scanKey(UUID()))
+        NagPreset.medication.apply(to: &task, keys: [], now: Fixture.date(28, 8), calendar: calendar)
+        #expect(task.proof == .none)
+    }
+
+    @Test func somedayAllowsUnlimitedSnoozes() {
+        var task = NagTask(title: "Someday", style: NagStyle(maxSnoozes: 2))
+        NagPreset.someday.apply(to: &task, keys: [], now: Fixture.date(28, 8), calendar: calendar)
+        #expect(task.style.maxSnoozes == nil)
+        #expect(task.snoozesLeft == nil)
+    }
+
+    @Test func presetsMatchTheTable() {
+        #expect(NagPreset.all.map(\.style.intervalMinutes) == [5, 15, 10, 60])
+        #expect(NagPreset.all.map(\.style.escalation) == [.relentless, .gentle, .relentless, .steady])
+        #expect(NagPreset.all.map(\.style.maxSnoozes) == [1, 3, 0, nil])
+    }
+
+    @Test func applyingAPresetTwiceIsIdempotent() {
+        var task = NagTask(title: "Laundry")
+        NagPreset.chore.apply(to: &task, keys: [], now: Fixture.date(28, 8), calendar: calendar)
+        let once = task
+        NagPreset.chore.apply(to: &task, keys: [], now: Fixture.date(28, 9), calendar: calendar)
+        task.updatedAt = once.updatedAt
+        #expect(task == once)
+    }
+
+    @Test func applyingAPresetKeepsTheScheduleValid() {
+        for preset in NagPreset.all {
+            var task = NagTask(
+                title: preset.name,
+                repeatRule: .custom,
+                times: [NagTime(minute: 9 * 60, weekdays: [2, 4, 6])]
+            )
+            preset.apply(to: &task, keys: [], now: Fixture.date(28, 8), calendar: calendar)
+            #expect(task.hasValidSchedule)
+        }
+    }
+}
+
 struct TaskRuleTests {
     let calendar = Fixture.calendar
 
