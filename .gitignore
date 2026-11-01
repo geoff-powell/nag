@@ -9,3 +9,5 @@ Packages/NagKit/.swiftpm/
 *.ipa
 *.dSYM.zip
 build/
+# Xcode may auto-create a local scheme for the widget extension. Only Nag and NagMac are shared.
+Nag.xcodeproj/xcshareddata/xcschemes/NagWidgets.xcscheme
