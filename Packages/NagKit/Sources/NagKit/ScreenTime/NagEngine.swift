@@ -57,9 +57,15 @@ public enum NagEngine {
         tolerance: TimeInterval,
         applyScreenTime: Bool
     ) async -> (state: NagState, plan: NagPlan, autoUnlocked: [LockProfile]) {
-        let (state, autoUnlocked) = store.update { state in
-            let unlocked = LockMaintenance.run(&state, now: now, calendar: calendar, tolerance: tolerance)
-            return (state, unlocked)
+        let (state, autoUnlocked): (NagState, [LockProfile])
+        if applyScreenTime {
+            (state, autoUnlocked) = store.update { state in
+                let unlocked = LockMaintenance.run(&state, now: now, calendar: calendar, tolerance: tolerance)
+                return (state, unlocked)
+            }
+        } else {
+            state = store.load()
+            autoUnlocked = []
         }
 
         if applyScreenTime {
