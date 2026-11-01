@@ -35,7 +35,10 @@ final class AppModel {
     func start() {
         // Extensions write to the store too (a schedule locking, a timed unlock expiring).
         changeObservation = store.observeChanges { [weak self] in
-            Task { @MainActor in self?.reload() }
+            Task { @MainActor in
+                self?.reload()
+                self?.cloudSync?.reconcile()
+            }
         }
         guard !isolated else { return }
         let cloud = CloudTaskSync(store: store) { [weak self] in
@@ -116,12 +119,21 @@ final class AppModel {
 
     /// Adds a nag from Shortcuts or Siri, or updates the one made earlier from the same source item.
     @discardableResult
-    func apply(_ request: NagRequest) throws(NagRequestError) -> NagDraft {
+    func apply(_ request: NagRequest, preset: NagPreset? = nil) throws(NagRequestError) -> NagDraft {
         var result: Result<NagDraft, NagRequestError> = .failure(.missingTitle)
         let calendar = calendar
         update { state in
             do throws(NagRequestError) {
-                result = .success(try state.apply(request, now: .now, calendar: calendar))
+                var draft = try state.apply(request, now: .now, calendar: calendar)
+                if let preset, let index = state.tasks.firstIndex(where: { $0.id == draft.task.id }) {
+                    preset.apply(to: &state.tasks[index], keys: state.keys, now: .now, calendar: calendar)
+                    // Explicit parameters override the preset's starting values.
+                    if let intervalMinutes = request.intervalMinutes {
+                        state.tasks[index].style.intervalMinutes = intervalMinutes
+                    }
+                    draft.task = state.tasks[index]
+                }
+                result = .success(draft)
             } catch {
                 result = .failure(error)
             }
@@ -151,8 +163,7 @@ final class AppModel {
 
     /// Marks a nag done. Nags that need a key scan go through `complete(_:scannedFingerprint:)` instead.
     func complete(_ id: UUID) {
-        guard let task = state.task(id), proofKey(for: task) == nil else { return }
-        mutateTask(id) { $0.complete(at: .now, calendar: calendar) }
+        perform { try NagActions.complete(taskID: id, store: $0, now: .now, calendar: calendar) }
     }
 
     /// Marks a nag done if `fingerprint` matches its key. Returns false for the wrong tag or code.
@@ -160,6 +171,8 @@ final class AppModel {
     func complete(_ id: UUID, scannedFingerprint fingerprint: String) -> Bool {
         guard let task = state.task(id) else { return false }
         if let key = proofKey(for: task), key.fingerprint != fingerprint { return false }
+        // The key was verified here. NagActions has no scanned-key escape hatch so callers outside
+        // the app can never bypass proof requirements.
         mutateTask(id) { $0.complete(at: .now, calendar: calendar) }
         return true
     }
@@ -176,15 +189,15 @@ final class AppModel {
     }
 
     func snooze(_ id: UUID) {
-        mutateTask(id) { _ = $0.snooze(at: .now) }
+        perform { try NagActions.snooze(taskID: id, minutes: nil, store: $0, now: .now, calendar: calendar) }
     }
 
     func snooze(_ id: UUID, minutes: Int) {
-        mutateTask(id) { _ = $0.snooze(at: .now, minutes: minutes) }
+        perform { try NagActions.snooze(taskID: id, minutes: minutes, store: $0, now: .now, calendar: calendar) }
     }
 
     func start(_ id: UUID) {
-        mutateTask(id) { $0.start(at: .now) }
+        perform { try NagActions.start(taskID: id, store: $0, now: .now, calendar: calendar) }
     }
 
     func clearFinished() {
@@ -234,6 +247,28 @@ final class AppModel {
         }
     }
 
+    /// Runs a shared-store action, then performs the app-only reconciliation done by `update`.
+    @discardableResult
+    private func perform<Result>(_ action: (SharedStore) throws -> Result) -> NagActions.Failure? {
+        let previousQuietHours = state.settings.syncedQuietHours
+        do {
+            _ = try action(store)
+        } catch let error as NagActions.Failure {
+            reload()
+            return error
+        } catch {
+            reload()
+            return nil
+        }
+        reload()
+        cloudSync?.reconcile()
+        if state.settings.syncedQuietHours != previousQuietHours {
+            quietHoursSync?.reconcile()
+        }
+        sync()
+        return nil
+    }
+
     // MARK: - Locks
 
     func profile(_ id: UUID) -> LockProfile? {
@@ -267,7 +302,7 @@ final class AppModel {
     }
 
     func lockNow(_ id: UUID) {
-        mutateProfile(id) { $0.lock(at: .now) }
+        perform { try NagActions.lockNow(profileID: id, store: $0, now: .now, calendar: calendar) }
     }
 
     func startWaitTimer(_ id: UUID) {
