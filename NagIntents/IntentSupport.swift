@@ -13,7 +13,9 @@ func finishIntent() async {
     #endif
 }
 
-func intentError(_ failure: NagActions.Failure) -> some Error {
+// Returns `any Error`, not `some Error`: throwing an opaque error from the async intents crashes
+// the Swift compiler (6.3, 6.4) in optimized builds.
+func intentError(_ failure: NagActions.Failure) -> any Error {
     IntentFailure(message: failure.errorDescription ?? "Nag couldn't complete that action.")
 }
 
