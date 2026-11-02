@@ -26,11 +26,16 @@ struct NagEntity: AppEntity, Identifiable {
         dueAt = task.nagStart ?? task.startAt
         isOverdue = task.isNagging(at: now)
         isSnoozed = task.isSnoozed(at: now)
-        needsKeyScan = Self.needsKeyScan(task, state: state)
+        needsKeyScan = WidgetSnapshot.needsKeyScan(task, in: state)
     }
 
-    static func needsKeyScan(_ task: NagTask, state: NagState) -> Bool {
-        task.proof.keyID.flatMap(state.key) != nil
+    init(summary: NagSummary) {
+        id = summary.id
+        title = summary.title
+        dueAt = summary.dueAt
+        isOverdue = summary.isOverdue
+        isSnoozed = summary.isSnoozed
+        needsKeyScan = summary.needsKeyScan
     }
 }
 
@@ -52,12 +57,8 @@ struct NagEntityQuery: EntityQuery, EntityStringQuery {
     func suggestedEntities() async throws -> [NagEntity] {
         let state = SharedStore.shared.load()
         let now = Date.now
-        // TODO(#14): Replace with WidgetSnapshot.make(...).due.
-        return state.tasks
-            .filter { !$0.isFinished && $0.isOutstanding(at: now) }
-            .sorted { ($0.nagStart ?? $0.startAt) < ($1.nagStart ?? $1.startAt) }
-            .prefix(10)
-            .map { NagEntity($0, state: state, now: now, calendar: .current) }
+        return WidgetSnapshot.make(from: state, now: now, calendar: .current, limit: 10)
+            .due.map(NagEntity.init(summary:))
     }
 
     private func entities(in state: NagState) -> [NagEntity] {
