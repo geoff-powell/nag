@@ -12,6 +12,12 @@ struct CompleteNagFromActivityIntent: LiveActivityIntent {
 
     @Parameter(title: "Nag") var nag: NagEntity
 
+    init() {}
+
+    init(nag: NagEntity) {
+        self.nag = nag
+    }
+
     func perform() async throws -> some IntentResult {
         do {
             try NagActions.complete(taskID: nag.id)
@@ -33,6 +39,13 @@ struct SnoozeNagFromActivityIntent: LiveActivityIntent {
 
     @Parameter(title: "Nag") var nag: NagEntity
     @Parameter(title: "Length") var length: SnoozeLengthOption?
+
+    init() {}
+
+    init(nag: NagEntity, length: SnoozeLengthOption? = nil) {
+        self.nag = nag
+        self.length = length
+    }
 
     func perform() async throws -> some IntentResult {
         do {
