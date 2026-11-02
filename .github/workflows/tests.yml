@@ -38,7 +38,25 @@ jobs:
         run: >
           xcodebuild -project Nag.xcodeproj -scheme Nag
           -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath build/ios-dd
           CODE_SIGNING_ALLOWED=NO -quiet build
+
+      # A target with no Sources phase still "builds", producing an extension with no code that
+      # only fails when installed on a device. Check every embedded extension has its executable.
+      - name: Check extensions have executables
+        run: |
+          app=build/ios-dd/Build/Products/Debug-iphonesimulator/Nag.app
+          status=0
+          for appex in "$app"/PlugIns/*.appex; do
+            exe="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$appex/Info.plist")"
+            if [[ -f "$appex/$exe" ]]; then
+              echo "OK $(basename "$appex")"
+            else
+              echo "::error::$(basename "$appex") has no executable ($exe)."
+              status=1
+            fi
+          done
+          exit $status
 
       - name: Build Mac app
         run: >

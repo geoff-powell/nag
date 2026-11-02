@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		5B337F23B48B528FF9AA9D22 /* NagKit in Frameworks */ = {isa = PBXBuildFile; productRef = B928687E80F72FF15DDF6ED5 /* NagKit */; };
+		1255209D707E0E2D359D5B02 /* NagKit in Frameworks */ = {isa = PBXBuildFile; productRef = B928687E80F72FF15DDF6ED5 /* NagKit */; };
 		AA0000000000000000000070 /* NagKit in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000080 /* NagKit */; };
 		AA0000000000000000000071 /* NagKit in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000081 /* NagKit */; };
 		AA0000000000000000000072 /* NagKit in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000082 /* NagKit */; };
@@ -205,6 +205,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C3EB1D5E661C0598D207174F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1255209D707E0E2D359D5B02 /* NagKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -264,9 +272,9 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2AA3C990972C2A14AA22EE42 /* Build configuration list for PBXNativeTarget "NagWidgets" */;
 			buildPhases = (
-				205FC523FC24F31517013D5E /* Sources */,
-				E78895D94DC4D043EC1A5914 /* Frameworks */,
-				9008695D7258B4A6EC7D7545 /* Resources */,
+				5DB3C47C34886584FD6B1802 /* Sources */,
+				C3EB1D5E661C0598D207174F /* Frameworks */,
+				B1953131B173C1E362D3CECF /* Resources */,
 			);
 			buildRules = (
 			);
@@ -532,9 +540,23 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B1953131B173C1E362D3CECF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		5DB3C47C34886584FD6B1802 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		AA0000000000000000000050 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;

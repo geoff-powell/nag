@@ -61,7 +61,7 @@ struct NagRowView: View {
             }
         }
             .font(.caption.bold())
-            .labelStyle(actionsInline ? .iconOnly : .titleOnly)
+            .labelStyle(ActionLabelStyle(iconOnly: actionsInline))
             .buttonStyle(.plain)
     }
 }
@@ -123,5 +123,18 @@ struct LockRowView: View {
         guard summary.stepsRemaining > 0 else { return "On" }
         if compact { return "On · \(summary.stepsRemaining) left" }
         return summary.stepsRemaining == 1 ? "On · 1 step left" : "On · \(summary.stepsRemaining) steps left"
+    }
+}
+
+/// Icons only when the actions sit inline with the title, words otherwise.
+private struct ActionLabelStyle: LabelStyle {
+    let iconOnly: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        if iconOnly {
+            configuration.icon
+        } else {
+            configuration.title
+        }
     }
 }
