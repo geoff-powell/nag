@@ -218,7 +218,7 @@ final class NagUITests: XCTestCase {
     func testBadLinkExplainsWhatsWrong() throws {
         launch()
         app.open(try XCTUnwrap(URL(string: "nag://add?title=Oops&repeat=hourly")))
-        XCTAssertTrue(app.alerts["Couldn't add that nag"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.alerts["Couldn't open that link"].waitForExistence(timeout: 10))
         app.alerts.buttons["OK"].tap()
         XCTAssertFalse(app.staticTexts["Oops"].exists)
     }

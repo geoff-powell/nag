@@ -31,7 +31,10 @@ struct RootView: View {
         .sheet(item: $router.incoming) { item in
             TaskEditorView(draft: item.draft)
         }
-        .alert("Couldn't add that nag", isPresented: hasLinkError) {
+        .sheet(isPresented: $router.newNag) {
+            TaskEditorView(task: nil)
+        }
+        .alert("Couldn't open that link", isPresented: hasLinkError) {
             Button("OK") { router.linkError = nil }
         } message: {
             Text(router.linkError ?? "")

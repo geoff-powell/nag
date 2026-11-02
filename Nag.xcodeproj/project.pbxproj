@@ -115,6 +115,11 @@
 			path = NagUITests;
 			sourceTree = "<group>";
 		};
+		AA0000000000000000000026 /* NagIntents */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = NagIntents;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -178,6 +183,7 @@
 				AA0000000000000000000023 /* NagShieldAction */,
 				AA0000000000000000000024 /* NagMac */,
 				AA0000000000000000000025 /* NagUITests */,
+				AA0000000000000000000026 /* NagIntents */,
 				AA0000000000000000000004 /* Config */,
 				AA0000000000000000000003 /* Products */,
 			);
@@ -234,6 +240,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				AA0000000000000000000020 /* Nag */,
+				AA0000000000000000000026 /* NagIntents */,
 			);
 			name = Nag;
 			packageProductDependencies = (

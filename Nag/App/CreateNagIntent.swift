@@ -15,7 +15,7 @@ struct CreateNagIntent: AppIntent {
     @Parameter(title: "Title", requestValueDialog: "What should Nag nag you about?")
     var title: String
 
-    @Parameter(title: "Notes")
+    @Parameter(title: "Notes", requestValueDialog: "What notes should the nag include?")
     var notes: String?
 
     @Parameter(title: "Starts", description: "When nagging starts. Leave empty to start now.")
@@ -24,8 +24,17 @@ struct CreateNagIntent: AppIntent {
     @Parameter(title: "Repeat", description: "Leave empty for a one-off nag.")
     var repeatOption: NagRepeatOption?
 
+    @Parameter(title: "Every N Days", description: "Used when Repeat is “Every N days”.")
+    var everyDays: Int?
+
+    @Parameter(title: "Day Of Month", description: "1–31. Used when Repeat is “Every month”.")
+    var monthDay: Int?
+
     @Parameter(title: "Nag Every", description: "Minutes between nags, from 1 to 1440.")
     var intervalMinutes: Int?
+
+    @Parameter(title: "Preset", description: "Starting point for how hard this nag pushes.")
+    var preset: NagPresetOption?
 
     @Parameter(title: "Source", description: "Where this came from, such as Calendar, Notes or Muse. Shown on the nag.")
     var source: String?
@@ -42,8 +51,11 @@ struct CreateNagIntent: AppIntent {
         Summary("Nag me about \(\.$title)") {
             \.$startAt
             \.$repeatOption
+            \.$everyDays
+            \.$monthDay
             \.$notes
             \.$intervalMinutes
+            \.$preset
             \.$source
             \.$externalID
             \.$link
@@ -57,11 +69,13 @@ struct CreateNagIntent: AppIntent {
             notes: notes,
             startAt: startAt,
             repeatRule: repeatOption?.rule,
+            repeatEvery: everyDays,
+            monthDay: monthDay,
             intervalMinutes: intervalMinutes,
             source: source,
             externalID: externalID,
             link: link
-        ))
+        ), preset: preset?.preset)
         // Plan the notifications before iOS suspends Nag again.
         await model.waitForSync()
         return .result(value: draft.task.id.uuidString, dialog: IntentDialog(stringLiteral: draft.summary))
@@ -73,6 +87,8 @@ enum NagRepeatOption: String, AppEnum {
     case daily
     case weekdays
     case weekly
+    case everyNDays
+    case monthly
 
     static let typeDisplayRepresentation: TypeDisplayRepresentation = "Repeat"
     static let caseDisplayRepresentations: [NagRepeatOption: DisplayRepresentation] = [
@@ -80,6 +96,8 @@ enum NagRepeatOption: String, AppEnum {
         .daily: "Every day",
         .weekdays: "Weekdays",
         .weekly: "Every week",
+        .everyNDays: "Every N days",
+        .monthly: "Every month",
     ]
 
     var rule: RepeatRule {
@@ -88,8 +106,27 @@ enum NagRepeatOption: String, AppEnum {
         case .daily: .daily
         case .weekdays: .weekdays
         case .weekly: .weekly
+        case .everyNDays: .everyNDays
+        case .monthly: .monthly
         }
     }
+}
+
+enum NagPresetOption: String, AppEnum {
+    case medication
+    case chore
+    case appointment
+    case someday
+
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "Preset"
+    static let caseDisplayRepresentations: [NagPresetOption: DisplayRepresentation] = [
+        .medication: DisplayRepresentation(title: "Medication", subtitle: "Every 5 min · relentless · 1 snooze · scan if available"),
+        .chore: DisplayRepresentation(title: "Chore", subtitle: "Every 15 min · gentle · 3 snoozes"),
+        .appointment: DisplayRepresentation(title: "Appointment", subtitle: "Every 10 min · relentless · no snoozes"),
+        .someday: DisplayRepresentation(title: "Someday", subtitle: "Every 60 min · steady · unlimited snoozes"),
+    ]
+
+    var preset: NagPreset { NagPreset.all.first { $0.id == rawValue } ?? .chore }
 }
 
 struct NagShortcuts: AppShortcutsProvider {
@@ -103,6 +140,39 @@ struct NagShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Create Nag",
             systemImageName: "bell.badge"
+        )
+        AppShortcut(
+            intent: CompleteNagIntent(),
+            phrases: [
+                "Mark a nag done in \(.applicationName)",
+                "I did it \(.applicationName)",
+            ],
+            shortTitle: "Complete Nag",
+            systemImageName: "checkmark.circle"
+        )
+        AppShortcut(
+            intent: SnoozeNagIntent(),
+            phrases: ["Snooze a nag in \(.applicationName)"],
+            shortTitle: "Snooze Nag",
+            systemImageName: "zzz"
+        )
+        AppShortcut(
+            intent: StartLockIntent(),
+            phrases: [
+                "Lock my apps with \(.applicationName)",
+                "Start a lock in \(.applicationName)",
+            ],
+            shortTitle: "Start Lock",
+            systemImageName: "lock.fill"
+        )
+        AppShortcut(
+            intent: ShowUnlockStepsIntent(),
+            phrases: [
+                "What do I owe \(.applicationName)",
+                "Show my unlock steps in \(.applicationName)",
+            ],
+            shortTitle: "Unlock Steps",
+            systemImageName: "list.bullet"
         )
     }
 }
