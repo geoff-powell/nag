@@ -13,6 +13,12 @@ struct CompleteNagIntent: AppIntent {
 
     @Parameter(title: "Nag", requestValueDialog: "Which nag did you complete?") var nag: NagEntity
 
+    init() {}
+
+    init(nag: NagEntity) {
+        self.nag = nag
+    }
+
     static var parameterSummary: some ParameterSummary {
         Summary("Mark \(\.$nag) done")
     }

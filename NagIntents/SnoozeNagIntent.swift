@@ -25,6 +25,13 @@ struct SnoozeNagIntent: AppIntent {
     @Parameter(title: "Nag", requestValueDialog: "Which nag do you want to snooze?") var nag: NagEntity
     @Parameter(title: "Length") var length: SnoozeLengthOption?
 
+    init() {}
+
+    init(nag: NagEntity, length: SnoozeLengthOption? = nil) {
+        self.nag = nag
+        self.length = length
+    }
+
     static var parameterSummary: some ParameterSummary {
         Summary("Snooze \(\.$nag)") {
             \.$length
