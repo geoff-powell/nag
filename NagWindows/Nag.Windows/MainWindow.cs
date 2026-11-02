@@ -86,14 +86,24 @@ public sealed class MainWindow : Form
         try { state = store.Change(state, change); feedback.Text = "Saved on this device."; Render(); return true; }
         catch (Exception ex) { MessageBox.Show(this, "The change was not saved.\n\n" + ex.Message, "Nag", MessageBoxButtons.OK, MessageBoxIcon.Error); return false; }
     }
+    // Timer-driven bookkeeping: no re-render, no "Saved" feedback, no modal dialog.
+    private bool Persist(Action<State> change)
+    {
+        try { state = store.Change(state, change); return true; }
+        catch (Exception ex) { feedback.Text = "Could not save reminder bookkeeping: " + ex.Message; return false; }
+    }
+    private void RefreshSubtitle()
+    {
+        int due = state.Reminders.Count(n => n.Outstanding(DateTime.Now));
+        subtitle.Text = $"{due} waiting for you · Small steps count. " + (demo ? "Demo · App enforcement disabled" : "");
+    }
     private void Render()
     {
         body.SuspendLayout();
         foreach (Control control in body.Controls.Cast<Control>().ToArray()) control.Dispose();
         body.Controls.Clear();
         foreach (var (name, button) in navigation) button.BackColor = page == name ? Color.FromArgb(225, 219, 203) : Color.Transparent;
-        int due = state.Reminders.Count(n => n.Outstanding(DateTime.Now));
-        subtitle.Text = $"{due} waiting for you · Small steps count. " + (demo ? "Demo · App enforcement disabled" : "");
+        RefreshSubtitle();
         if (page == "Nags") RenderNags(); else if (page == "Locks") RenderLocks(); else RenderSettings();
         LayoutBody();
         body.ResumeLayout();
@@ -175,8 +185,14 @@ public sealed class MainWindow : Form
         Change(s =>
         {
             var updated = editor.Result!;
-            int index = s.Reminders.FindIndex(n => n.Id == updated.Id);
-            if (index < 0) s.Reminders.Add(updated); else s.Reminders[index] = updated;
+            if (reminder is null) { s.Reminders.Add(updated); return; }
+            var current = s.Reminders.Find(n => n.Id == updated.Id);
+            if (current is null) return; // deleted while the editor was open
+            current.Title = updated.Title; current.Notes = updated.Notes; current.Due = updated.Due; current.Repeat = updated.Repeat;
+            current.IntervalMinutes = updated.IntervalMinutes; current.Escalation = updated.Escalation;
+            current.SnoozeMinutes = updated.SnoozeMinutes; current.MaxSnoozes = updated.MaxSnoozes;
+            if (editor.ScheduleChanged)
+            { current.SnoozeCount = 0; current.SnoozedUntil = null; current.LastNotified = null; current.Finished = false; }
         });
     }
     internal void Complete(Guid id) => Change(s => s.Reminders.Single(n => n.Id == id).Complete(DateTime.Now));
@@ -245,11 +261,16 @@ public sealed class MainWindow : Form
         if (due.Count > 0)
         {
             // One grouped notification per tick avoids flooding the Windows notification queue.
-            if (Change(s => { foreach (var n in s.Reminders.Where(n => due.Any(d => d.Id == n.Id))) n.LastNotified = now; }))
+            if (Persist(s => { foreach (var n in s.Reminders.Where(n => due.Any(d => d.Id == n.Id))) n.LastNotified = now; }))
                 tray.ShowBalloonTip(5000, due.Count == 1 ? due[0].Title : $"{due.Count} nags need a small step",
                     due.Count == 1 ? due[0].Message(now)[..Math.Min(220, due[0].Message(now).Length)] : "Still here. Mark it done when it is.", ToolTipIcon.Info);
         }
-        if (signature != StateSignature()) Render(); else UpdatePanel();
+        if (signature != StateSignature())
+        {
+            if (page == "Settings") { RefreshSubtitle(); signature = StateSignature(); UpdatePanel(); } // keep unsaved settings draft
+            else Render();
+        }
+        else UpdatePanel();
         if (!demo) EnforceLocks(now);
     }
     private void UpdatePanel()
@@ -319,7 +340,7 @@ internal sealed class ReminderPanel : Form
     }
     public void UpdateReminders(List<Reminder> reminders)
     {
-        string next = string.Join('|', reminders.Select(n => n.Id + n.Title + n.SnoozeCount));
+        string next = string.Join('|', reminders.Select(n => $"{n.Id}\u001f{n.Title}\u001f{n.SnoozeMinutes}\u001f{n.SnoozeCount}\u001f{n.MaxSnoozes}"));
         if (signature == next) return; signature = next;
         foreach (Control c in contents.Controls.Cast<Control>().ToArray()) c.Dispose(); contents.Controls.Clear();
         contents.Controls.Add(MainWindow.Label($"{reminders.Count} waiting for you", 11, true));

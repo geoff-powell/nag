@@ -36,6 +36,7 @@ internal abstract class EditorWindow : Form
 internal sealed class ReminderEditor : EditorWindow
 {
     public Reminder? Result { get; private set; }
+    public bool ScheduleChanged { get; private set; }
     public ReminderEditor(Reminder? original) : base(original is null ? "Add a nag" : "Edit nag")
     {
         var reminder = original ?? new();
@@ -51,9 +52,9 @@ internal sealed class ReminderEditor : EditorWindow
             if (string.IsNullOrWhiteSpace(title.Text)) { MessageBox.Show(this, "Give your nag a title.", "Nag"); title.Focus(); return; }
             var updated = reminder with { Title = title.Text.Trim(), Notes = notes.Text, Due = due.Value, Repeat = (Repeat)repeat.SelectedItem!,
                 IntervalMinutes = (int)interval.Value, Escalation = (Escalation)escalation.SelectedItem!, SnoozeMinutes = (int)snooze.Value, MaxSnoozes = (int)limit.Value };
-            if (updated.Due != reminder.Due || updated.Repeat != reminder.Repeat)
-            { updated.SnoozeCount = 0; updated.SnoozedUntil = null; updated.LastNotified = null; updated.Finished = false; }
-            updated.Validate(); Result = updated; DialogResult = DialogResult.OK; Close();
+            bool changed = updated.Due != reminder.Due || updated.Repeat != reminder.Repeat;
+            if (changed) { updated.SnoozeCount = 0; updated.SnoozedUntil = null; updated.LastNotified = null; updated.Finished = false; }
+            updated.Validate(); ScheduleChanged = changed; Result = updated; DialogResult = DialogResult.OK; Close();
         });
     }
 }

@@ -8,20 +8,20 @@ public enum Escalation { Steady, Gentle, Relentless }
 
 public sealed record Reminder
 {
-    public Guid Id { get; init; } = Guid.NewGuid();
-    public string Title { get; set; } = "";
-    public string Notes { get; set; } = "";
+    [JsonRequired] public Guid Id { get; init; } = Guid.NewGuid();
+    [JsonRequired] public string Title { get; set; } = "";
+    [JsonRequired] public string Notes { get; set; } = "";
     // Local wall clock: recurring reminders retain their local time across DST changes.
-    public DateTime Due { get; set; } = DateTime.Now;
-    public Repeat Repeat { get; set; }
-    public int IntervalMinutes { get; set; } = 15;
-    public Escalation Escalation { get; set; } = Escalation.Gentle;
-    public int SnoozeMinutes { get; set; } = 10;
-    public int MaxSnoozes { get; set; } = 3;
-    public int SnoozeCount { get; set; }
-    public DateTime? SnoozedUntil { get; set; }
-    public DateTime? LastNotified { get; set; }
-    public bool Finished { get; set; }
+    [JsonRequired] public DateTime Due { get; set; } = DateTime.Now;
+    [JsonRequired] public Repeat Repeat { get; set; }
+    [JsonRequired] public int IntervalMinutes { get; set; } = 15;
+    [JsonRequired] public Escalation Escalation { get; set; } = Escalation.Gentle;
+    [JsonRequired] public int SnoozeMinutes { get; set; } = 10;
+    [JsonRequired] public int MaxSnoozes { get; set; } = 3;
+    [JsonRequired] public int SnoozeCount { get; set; }
+    [JsonRequired] public DateTime? SnoozedUntil { get; set; }
+    [JsonRequired] public DateTime? LastNotified { get; set; }
+    [JsonRequired] public bool Finished { get; set; }
 
     public bool Outstanding(DateTime now) => !Finished && Due <= now;
     public bool Snoozed(DateTime now) => Outstanding(now) && SnoozedUntil > now;
@@ -91,22 +91,22 @@ public sealed record Reminder
 
 public sealed record AppLock
 {
-    public Guid Id { get; init; } = Guid.NewGuid();
-    public string Name { get; set; } = "Focus";
-    public List<string> Executables { get; set; } = [];
-    public bool Enabled { get; set; }
-    public bool WhileDue { get; set; } = true;
-    public DateTime? Until { get; set; }
-    public DateTime? EmergencyUntil { get; set; }
+    [JsonRequired] public Guid Id { get; init; } = Guid.NewGuid();
+    [JsonRequired] public string Name { get; set; } = "Focus";
+    [JsonRequired] public List<string> Executables { get; set; } = [];
+    [JsonRequired] public bool Enabled { get; set; }
+    [JsonRequired] public bool WhileDue { get; set; } = true;
+    [JsonRequired] public DateTime? Until { get; set; }
+    [JsonRequired] public DateTime? EmergencyUntil { get; set; }
     public bool Active(DateTime now, IEnumerable<Reminder> reminders) => Enabled && !(EmergencyUntil > now)
         && (WhileDue ? reminders.Any(n => n.Outstanding(now)) : Until > now);
 }
 
 public sealed record Settings
 {
-    public bool QuietEnabled { get; set; }
-    public int QuietStartHour { get; set; } = 22;
-    public int QuietEndHour { get; set; } = 8;
+    [JsonRequired] public bool QuietEnabled { get; set; }
+    [JsonRequired] public int QuietStartHour { get; set; } = 22;
+    [JsonRequired] public int QuietEndHour { get; set; } = 8;
     public bool IsQuiet(DateTime now) => QuietEnabled && QuietStartHour != QuietEndHour
         && (QuietStartHour < QuietEndHour ? now.Hour >= QuietStartHour && now.Hour < QuietEndHour
             : now.Hour >= QuietStartHour || now.Hour < QuietEndHour);
@@ -114,10 +114,10 @@ public sealed record Settings
 
 public sealed record State
 {
-    public int Version { get; init; } = 1;
-    public List<Reminder> Reminders { get; set; } = [];
-    public List<AppLock> Locks { get; set; } = [];
-    public Settings Settings { get; set; } = new();
+    [JsonRequired] public int Version { get; init; } = 1;
+    [JsonRequired] public List<Reminder> Reminders { get; set; } = [];
+    [JsonRequired] public List<AppLock> Locks { get; set; } = [];
+    [JsonRequired] public Settings Settings { get; set; } = new();
     public void Validate()
     {
         if (Version != 1 || Reminders is null || Locks is null || Settings is null)

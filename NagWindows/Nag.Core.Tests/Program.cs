@@ -97,6 +97,38 @@ try
         try { store.Load(); throw new Exception("Corruption ignored"); } catch (System.Text.Json.JsonException) { }
         Equal("broken", File.ReadAllText(store.FilePath));
     });
+    Check("incomplete store is rejected rather than treated as empty", () =>
+    {
+        File.WriteAllText(store.FilePath, "{}");
+        try { store.Load(); throw new Exception("Incomplete store accepted"); } catch (System.Text.Json.JsonException) { }
+    });
+    Check("store missing a nested required key is rejected", () =>
+    {
+        var state = new State { Reminders = [new() { Title = "Test", Due = friday }] }; store.Save(state);
+        string json = File.ReadAllText(store.FilePath);
+        string withoutId = System.Text.RegularExpressions.Regex.Replace(json, "\"Id\": \"[^\"]+\",\\s*\"Title\"", "\"Title\"");
+        if (withoutId == json) throw new Exception("Test setup failed to remove Id");
+        File.WriteAllText(store.FilePath, withoutId);
+        try { store.Load(); throw new Exception("Reminder without Id accepted"); } catch (System.Text.Json.JsonException) { }
+        File.WriteAllText(store.FilePath, json.Replace("\"Settings\"", "\"Setting\""));
+        try { store.Load(); throw new Exception("Store without Settings accepted"); } catch (System.Text.Json.JsonException) { }
+    });
+    Check("fully serialized state with null optional timestamps still loads", () =>
+    {
+        var state = new State { Reminders = [new() { Title = "Test", Due = friday }], Locks = [new() { Name = "Focus" }] }; store.Save(state);
+        var loaded = store.Load();
+        Equal<DateTime?>(null, loaded.Reminders[0].SnoozedUntil); Equal<DateTime?>(null, loaded.Reminders[0].LastNotified);
+        Equal<DateTime?>(null, loaded.Locks[0].Until);
+    });
+    Check("incomplete store does not overwrite the last backup", () =>
+    {
+        var state = new State { Reminders = [new() { Title = "Good", Due = friday }] };
+        store.Save(state); store.Save(state);
+        string backup = File.ReadAllText(store.FilePath + ".bak");
+        File.WriteAllText(store.FilePath, "{}");
+        try { store.Load(); throw new Exception("Incomplete store accepted"); } catch (System.Text.Json.JsonException) { }
+        Equal(backup, File.ReadAllText(store.FilePath + ".bak"));
+    });
 }
 finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
 Console.WriteLine($"{passed} checks passed.");
