@@ -7,6 +7,7 @@ public struct NagSummary: Hashable, Sendable, Identifiable {
     public var isOverdue: Bool
     public var isSnoozed: Bool
     public var isStarted: Bool
+    /// False when completion requires a key scan, even if the underlying task is otherwise completable.
     public var canComplete: Bool
     public var canSnooze: Bool
     public var needsKeyScan: Bool
@@ -146,6 +147,7 @@ public struct WidgetSnapshot: Hashable, Sendable {
             consider(task.workingUntil())
 
             guard task.isOutstanding(at: now) else { continue }
+            let actions = NagActionAvailability.make(task: task, state: state, now: now, calendar: calendar)
             allDue.append(NagSummary(
                 id: task.id,
                 title: task.title,
@@ -153,9 +155,9 @@ public struct WidgetSnapshot: Hashable, Sendable {
                 isOverdue: task.isNagging(at: now),
                 isSnoozed: task.isSnoozed(at: now),
                 isStarted: task.isStarted(at: now),
-                canComplete: task.canComplete(at: now, calendar: calendar),
-                canSnooze: task.canSnooze(at: now),
-                needsKeyScan: needsKeyScan(task, in: state)
+                canComplete: actions.canComplete,
+                canSnooze: actions.canSnooze,
+                needsKeyScan: actions.needsKeyScan
             ))
         }
 

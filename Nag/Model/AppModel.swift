@@ -95,6 +95,9 @@ final class AppModel {
             await previous?.value
             await NagEngine.sync(store: store)
             reload()
+            // ActivityKit stays app-process-only. In particular, NagMonitor must not update or end
+            // activities: extension execution limits make that unsupported spike unsafe for v1.
+            await LiveActivities.reconcile(state: state, now: .now, calendar: calendar)
         }
     }
 

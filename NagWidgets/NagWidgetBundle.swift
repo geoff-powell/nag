@@ -10,5 +10,7 @@ struct NagWidgetBundle: WidgetBundle {
         QuickNagControl()
         NagsDueControl()
         LockNowControl()
+        NagLiveActivity()
+        LockLiveActivity()
     }
 }
