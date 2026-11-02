@@ -7,5 +7,8 @@ struct NagWidgetBundle: WidgetBundle {
         DueNagsWidget()
         DueCountWidget()
         LocksWidget()
+        QuickNagControl()
+        NagsDueControl()
+        LockNowControl()
     }
 }
