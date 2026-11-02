@@ -1,4 +1,8 @@
 .DS_Store
+# Windows build output
+NagWindows/**/bin/
+NagWindows/**/obj/
+NagWindows/**/*.user
 xcuserdata/
 *.xcuserstate
 DerivedData/

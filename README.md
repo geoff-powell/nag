@@ -3,6 +3,10 @@
 Reminders that don't give up, plus app locks like [Brick](https://getbrick.app). Built for ADHD brains
 that forget things the moment they leave the screen.
 
+A standalone native [Windows client](NagWindows/README.md) is available in `NagWindows`: local nags,
+recurring reminders, tray notifications and voluntary app locks. Its storage is independent of the
+Apple apps; iCloud sync is not available on Windows.
+
 - **Nags** keep reminding you until something is actually done. They come more often the longer it
   waits, snoozes are limited, and the wording gets pushier. Nags can need a physical key scanned to
   finish (an NFC sticker on the pill bottle, say).

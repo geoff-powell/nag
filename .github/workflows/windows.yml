@@ -1,0 +1,34 @@
+name: Windows
+on:
+  push:
+    branches: [main]
+    paths: ['NagWindows/**', '.github/workflows/windows.yml']
+  pull_request:
+    paths: ['NagWindows/**', '.github/workflows/windows.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Core regression checks
+        run: dotnet run --project NagWindows/Nag.Core.Tests -c Release
+      - name: Native UI smoke checks
+        run: dotnet run --project NagWindows/Nag.Windows.Tests -c Release
+      - name: Package portable app
+        run: ./NagWindows/build.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Nag-win-x64
+          path: build/Nag-win-x64.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Windows-layout-evidence
+          path: build/windows-evidence/*.png
