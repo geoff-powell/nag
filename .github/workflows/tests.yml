@@ -6,6 +6,8 @@ on:
   pull_request:
   # Deploy runs these first.
   workflow_call:
+  # Bump version starts these for its pull request, which doesn't trigger pull_request runs.
+  workflow_dispatch:
 
 concurrency:
   # In a called workflow, github.workflow is the caller's name, so deploys never cancel push runs.

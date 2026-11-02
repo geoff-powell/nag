@@ -1,11 +1,12 @@
 name: Bump version
 
-# Changes the app version (MARKETING_VERSION in Config/Base.xcconfig) and commits it straight to
-# main. Start it from Actions > Bump version > Run workflow.
+# Changes the app version (MARKETING_VERSION in Config/Base.xcconfig) on a new branch and opens a
+# pull request for it. Start it from Actions > Bump version > Run workflow. Merging the pull request
+# ships the new version, like any other merge to main.
 #
-# Pushes made with the workflow's token don't start other workflows, so Tests and Deploy don't run
-# for the bump commit on their own. Tick "deploy" to start Deploy for it (Deploy runs the tests
-# first), or let the next merge to main ship it.
+# Needs Settings > Actions > General > "Allow GitHub Actions to create and approve pull requests".
+# Pull requests opened with the workflow's token don't start other workflows, so this starts Tests
+# on the branch itself; its result shows on the pull request.
 
 on:
   workflow_dispatch:
@@ -19,10 +20,6 @@ on:
         description: Exact version, like 1.4 or 1.4.2 (only with "set")
         type: string
         required: false
-      deploy:
-        description: Deploy both apps after the bump
-        type: boolean
-        default: false
 
 concurrency:
   group: bump-version
@@ -33,10 +30,11 @@ permissions:
 
 jobs:
   bump:
-    name: Bump version
+    name: Open version pull request
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
       actions: write
     steps:
       - uses: actions/checkout@v4
@@ -61,32 +59,44 @@ jobs:
           old="$(source scripts/lib.sh && marketing_version)"
           new="$(scripts/bump-version.sh "$arg")"
           echo "Version $old -> $new"
-          echo "version=$new" >> "$GITHUB_OUTPUT"
+          {
+            echo "old=$old"
+            echo "version=$new"
+            echo "branch=bump-version/$new"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Commit to main
+      - name: Push the branch
         env:
           VERSION: ${{ steps.bump.outputs.version }}
+          BRANCH: ${{ steps.bump.outputs.branch }}
         run: |
+          if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null; then
+            echo "::error::Branch $BRANCH already exists. Merge or close its pull request and delete the branch first."
+            exit 1
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
           git commit -am "chore: bump version to $VERSION"
-          # Main may have moved since checkout; replay the bump on top and retry a few times.
-          for attempt in 1 2 3; do
-            if git push origin HEAD:main; then
-              echo "Pushed $(git rev-parse --short HEAD) to main."
-              exit 0
-            fi
-            echo "Push $attempt failed, rebasing on the latest main."
-            git pull --rebase origin main
-          done
-          echo "::error::Couldn't push the version bump to main."
-          exit 1
+          git push origin "$BRANCH"
 
-      - name: Start Deploy
-        if: inputs.deploy
+      - name: Open the pull request
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          OLD: ${{ steps.bump.outputs.old }}
+          VERSION: ${{ steps.bump.outputs.version }}
+          BRANCH: ${{ steps.bump.outputs.branch }}
         run: |
-          gh workflow run deploy.yml --ref main -f platform=both
-          echo "Started Deploy for main. Follow it under Actions > Deploy."
+          url="$(gh pr create --base main --head "$BRANCH" \
+            --title "chore: bump version to $VERSION" \
+            --body "Changes the app version from $OLD to $VERSION. Opened by the Bump version workflow, started by @$GITHUB_ACTOR. Merging this ships $VERSION.")"
+          echo "Opened $url"
+          echo "Opened [the version pull request]($url)." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Start Tests on the branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ steps.bump.outputs.branch }}
+        run: gh workflow run tests.yml --ref "$BRANCH"

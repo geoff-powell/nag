@@ -113,11 +113,13 @@ Three workflows:
   workflow** (pick iPhone, Mac or both), or push a tag like `v1.0` to deploy both under that tag.
   Manual and tag deploys run the tests first.
 - **Bump version** (`.github/workflows/bump-version.yml`) changes the app version
-  (`MARKETING_VERSION` in `Config/Base.xcconfig`) and commits it to `main`. Start it from
-  **Actions → Bump version → Run workflow** and pick patch, minor or major, or "set" with an exact
-  version. Commits made by a workflow don't start Tests or Deploy, so tick **deploy** to ship the
-  new version straight away; otherwise the next merge to `main` ships it. To bump locally instead,
-  run `scripts/bump-version.sh minor` (or `patch`, `major`, `1.4.2`) and commit the change.
+  (`MARKETING_VERSION` in `Config/Base.xcconfig`) on a `bump-version/<version>` branch and opens a
+  pull request for it. Start it from **Actions → Bump version → Run workflow** and pick patch, minor
+  or major, or "set" with an exact version. Merging the pull request ships the new version. Pull
+  requests opened by a workflow don't start Tests by themselves, so the workflow starts Tests on the
+  branch and the result shows on the pull request. It needs **Settings → Actions → General → Allow
+  GitHub Actions to create and approve pull requests** turned on. To bump locally instead, run
+  `scripts/bump-version.sh minor` (or `patch`, `major`, `1.4.2`) and commit the change.
 
 CI can't sign in to Xcode, so Deploy needs these repository secrets. Set them once with `gh`
 from this folder, signed in as the repo owner (`gh auth switch --user geoff-powell`).
