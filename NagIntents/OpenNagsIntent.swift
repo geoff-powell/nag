@@ -6,7 +6,9 @@ struct OpenNagsIntent: AppIntent {
     static let description = IntentDescription("Opens the list of nags.")
     static let openAppWhenRun = true
 
-    func perform() async throws -> some IntentResult & OpensIntent {
-        .result(opensIntent: OpenURLIntent(NagRoute.nags.url))
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        IntentNavigation.open(.nags)
+        return .result()
     }
 }

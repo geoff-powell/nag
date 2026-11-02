@@ -6,7 +6,9 @@ struct QuickAddNagIntent: AppIntent {
     static let description = IntentDescription("Opens Nag to create a new nag.")
     static let openAppWhenRun = true
 
-    func perform() async throws -> some IntentResult & OpensIntent {
-        .result(opensIntent: OpenURLIntent(NagRoute.newNag.url))
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        IntentNavigation.open(.newNag)
+        return .result()
     }
 }

@@ -24,21 +24,25 @@ struct SetLockEngagedIntent: SetValueIntent {
         self.lock = lock
     }
 
-    func perform() async throws -> some IntentResult & OpensIntent {
+    @MainActor
+    func perform() async throws -> some IntentResult {
         guard let lock else {
             // No lock chosen yet: change nothing and open Nag at Locks.
             ControlCenter.shared.reloadControls(ofKind: NagID.Control.lockNow)
-            return .result(opensIntent: OpenURLIntent(NagRoute.locks.url))
+            IntentNavigation.open(.locks)
+            return .result()
         }
         guard value else {
             // Off never changes the lock: reload so the toggle snaps back on, and open the unlock screen.
             ControlCenter.shared.reloadControls(ofKind: NagID.Control.lockNow)
-            return .result(opensIntent: OpenURLIntent(NagRoute.unlock(profileID: lock.id).url))
+            IntentNavigation.open(.unlock(profileID: lock.id))
+            return .result()
         }
         do {
             _ = try NagActions.lockNow(profileID: lock.id)
             await finishIntent()
-            return .result(opensIntent: OpenURLIntent(NagRoute.locks.url))
+            IntentNavigation.open(.locks)
+            return .result()
         } catch let failure {
             throw intentError(failure)
         }
