@@ -15,16 +15,21 @@ struct SetLockEngagedIntent: SetValueIntent {
     // in the app or the widget extension.
     static let openAppWhenRun = true
 
-    @Parameter(title: "Lock") var lock: LockEntity
+    @Parameter(title: "Lock") var lock: LockEntity?
     @Parameter(title: "On") var value: Bool
 
     init() {}
 
-    init(lock: LockEntity) {
+    init(lock: LockEntity?) {
         self.lock = lock
     }
 
     func perform() async throws -> some IntentResult & OpensIntent {
+        guard let lock else {
+            // No lock chosen yet: change nothing and open Nag at Locks.
+            ControlCenter.shared.reloadControls(ofKind: NagID.Control.lockNow)
+            return .result(opensIntent: OpenURLIntent(NagRoute.locks.url))
+        }
         guard value else {
             // Off never changes the lock: reload so the toggle snaps back on, and open the unlock screen.
             ControlCenter.shared.reloadControls(ofKind: NagID.Control.lockNow)
