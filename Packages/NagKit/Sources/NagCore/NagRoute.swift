@@ -4,6 +4,7 @@ public enum NagRoute: Hashable, Sendable {
     case add(NagRequest)
     case newNag
     case nags
+    case locks
     case nag(UUID)
     case scan(taskID: UUID)
     case unlock(profileID: UUID)
@@ -19,6 +20,7 @@ public enum NagRoute: Hashable, Sendable {
         case "add", "new": self = .add(try NagRequest(url: url, now: now, calendar: calendar))
         case "new-nag", "newnag": self = .newNag
         case "nags": self = .nags
+        case "locks": self = .locks
         case "nag": self = .nag(try Self.id(in: components))
         case "scan": self = .scan(taskID: try Self.id(in: components))
         case "unlock": self = .unlock(profileID: try Self.id(in: components))
@@ -37,6 +39,7 @@ public enum NagRoute: Hashable, Sendable {
             return components.url!
         case .newNag: return URL(string: "nag://new-nag")!
         case .nags: return URL(string: "nag://nags")!
+        case .locks: return URL(string: "nag://locks")!
         case .nag(let id): return Self.url(host: "nag", id: id)
         case .scan(let taskID): return Self.url(host: "scan", id: taskID)
         case .unlock(let profileID): return Self.url(host: "unlock", id: profileID)
