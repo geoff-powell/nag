@@ -223,6 +223,11 @@ public struct ControlState: Hashable, Sendable {
     /// Engaged rather than shielding, so a temporarily unlocked lock honestly remains on.
     public var isLockEngaged: Bool
 
+    /// Fixed values for control previews in the gallery.
+    public static func preview(dueCount: Int, lock: LockSummary?, isLockEngaged: Bool) -> ControlState {
+        ControlState(dueCount: dueCount, lock: lock, isLockEngaged: isLockEngaged)
+    }
+
     public static func make(
         from state: NagState,
         lockID: UUID?,
