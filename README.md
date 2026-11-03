@@ -23,7 +23,11 @@ Apple apps; iCloud sync is not available on Windows.
    - `DEVELOPMENT_TEAM` to your Team ID
    - `NAG_BUNDLE_ID` to something unique, e.g. `com.yourname.nag`
 2. Open `Nag.xcodeproj`. Signing is automatic. Xcode registers the app group
-   (`group.<NAG_BUNDLE_ID>`) and the iCloud key-value store for you.
+   (`group.<NAG_BUNDLE_ID>`), the iCloud key-value store, push notifications and the CloudKit
+   container (`iCloud.<NAG_BUNDLE_ID>`, used for accountability buddies) for you. If the container
+   isn't created automatically, add it under the iPhone app's Signing & Capabilities → iCloud.
+   Before shipping a build that uses buddies, deploy the CloudKit schema to production in the
+   [CloudKit Console](https://icloud.developer.apple.com).
 3. Run the **Nag** scheme on an iPhone, and **NagMac** on your Mac.
 
 You need a **paid Apple Developer account**. Family Controls (Screen Time), app groups, Time Sensitive
@@ -213,6 +217,16 @@ normally. Turn on *Open at login* so locks survive a restart.
 
 **Keys.** NFC tags are identified by their hardware ID, and codes by their contents. Only a SHA-256
 hash is stored. Nag can print a fresh QR code for you, or use any barcode you already own.
+
+**Accountability buddy (iPhone).** Off until you turn it on in Settings → Accountability buddy. You
+pick nags and locks to share, then invite one person with the system sharing sheet. Nag keeps a small
+record for each shared item (title, done / still due / started, due date, last done) in a `Buddy` zone
+in your private CloudKit database, shared zone-wide with that person. Nothing else leaves the phone.
+Your buddy sees each item as "did it" or "still due" and can send a nudge, at most once per item until
+it's done or every four hours. Nudges arrive as quiet notifications and are deleted once read. Stopping
+sharing deletes the zone. Which items are shared is a set of IDs on its own iCloud key
+(`nag.buddy.shared.v1`) instead of a flag on each nag, because older builds re-encode nags and would drop
+an unknown field. The Mac app doesn't share or follow yet.
 
 **Sync.** Only nags sync, through iCloud key-value storage. Locks and keys are specific to each device
 (app selections and NFC tags don't carry across). Edits merge last-writer-wins, except that a

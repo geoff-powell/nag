@@ -1,4 +1,5 @@
 import AppIntents
+import CloudKit
 import NagKit
 import UIKit
 @preconcurrency import UserNotifications
@@ -8,8 +9,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     let model = UITesting.isActive ? UITesting.makeModel() : AppModel(store: .shared)
     let router = Router()
 
+    /// SwiftUI wraps the app delegate, so `UIApplication.shared.delegate` isn't this object. The scene
+    /// delegate reaches it through here.
+    private(set) static weak var current: AppDelegate?
+
     override init() {
         super.init()
+        Self.current = self
         // Shortcuts and Siri can launch Nag in the background to run an intent, so register before launch finishes.
         let model = model
         AppDependencyManager.shared.add(dependency: model)
@@ -23,6 +29,48 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         NotificationSync.registerCategories()
         model.start()
         return true
+    }
+
+    /// A scene delegate, so Nag hears about accepted CloudKit share invitations.
+    func application(
+        _ application: UIApplication,
+        configurationForConnecting connectingSceneSession: UISceneSession,
+        options: UIScene.ConnectionOptions
+    ) -> UISceneConfiguration {
+        let configuration = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
+        configuration.delegateClass = SceneDelegate.self
+        return configuration
+    }
+
+    func application(_ application: UIApplication, userDidAcceptCloudKitShareWith metadata: CKShare.Metadata) {
+        acceptShare(metadata)
+    }
+
+    func acceptShare(_ metadata: CKShare.Metadata) {
+        guard let buddy = model.buddy else { return }
+        router.showBuddy()
+        Task { await buddy.accept(metadata) }
+    }
+
+    /// CloudKit pushes when a buddy leaves a nudge. Uses the completion-handler form for the same
+    /// main-thread reason as the notification response below.
+    nonisolated func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping @Sendable (UIBackgroundFetchResult) -> Void
+    ) {
+        guard CloudBuddyService.isCloudKitNotification(userInfo) else {
+            completionHandler(.noData)
+            return
+        }
+        Task { @MainActor in
+            await self.model.buddy?.refresh()
+            completionHandler(.newData)
+        }
+    }
+
+    func backgroundRefresh() async {
+        await model.buddy?.refresh()
     }
 
     /// Nags should nag even while Nag is open.
