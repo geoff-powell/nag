@@ -14,6 +14,8 @@ final class AppModel {
     private(set) var state: NagState
     private(set) var screenTimeStatus: AuthorizationStatus
     private(set) var notificationStatus: UNAuthorizationStatus = .notDetermined
+    /// The latest reward for finishing something in the app. RootView plays its haptic.
+    private(set) var celebration: Celebration?
 
     var calendar: Calendar { .current }
 
@@ -24,6 +26,8 @@ final class AppModel {
     /// UI tests: no iCloud, and no shields, DeviceActivity schedules or notifications. On a real
     /// iPhone those are shared with the user's real Nag, so a test run must not touch them.
     @ObservationIgnored private let isolated: Bool
+    @ObservationIgnored private var celebrationCount = 0
+    @ObservationIgnored private let celebrationSeed = UInt64.random(in: .min ... .max)
 
     init(store: SharedStore, isolated: Bool = false) {
         self.store = store
@@ -367,6 +371,24 @@ final class AppModel {
     func deleteKey(_ id: UUID) {
         guard canDeleteKey(id) else { return }
         update { $0.keys.removeAll { $0.id == id } }
+    }
+
+    // MARK: - Celebrations
+
+    /// Picks the reward for a nag finished or a lock unlocked from the app's own UI, and returns it so
+    /// the view can play the animation where it happened. Widget, Siri and notification completions
+    /// don't celebrate.
+    @discardableResult
+    func celebrate(reduceMotion: Bool) -> Celebration {
+        let celebration = Celebration.make(
+            index: celebrationCount,
+            seed: celebrationSeed,
+            haptics: state.settings.haptics,
+            reduceMotion: reduceMotion
+        )
+        celebrationCount += 1
+        self.celebration = celebration
+        return celebration
     }
 
     // MARK: - Settings

@@ -56,6 +56,13 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Haptics", isOn: settingBinding(\.haptics))
+                        .accessibilityIdentifier("settings.haptics")
+                } footer: {
+                    Text("A tap you can feel when you finish a nag, snooze or unlock. Only on this iPhone.")
+                }
+
+                Section {
                     Stepper(
                         "Emergency unlocks: \(model.state.settings.emergencyUnlocksPerMonth) a month",
                         value: settingBinding(\.emergencyUnlocksPerMonth),

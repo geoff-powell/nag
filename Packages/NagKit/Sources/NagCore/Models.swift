@@ -542,6 +542,9 @@ public struct AppSettings: Codable, Hashable, Sendable {
     public var hasOnboarded: Bool
     /// Screen Time access was granted, so DeviceActivity can wake Nag in the background (iOS).
     public var screenTimeApproved: Bool
+    /// Haptics when finishing a nag, snoozing or unlocking. Per device: some people find them too much on
+    /// one device but not another, so this never syncs.
+    public var haptics: Bool
 
     public init(
         quietHours: QuietHours = QuietHours(),
@@ -550,7 +553,8 @@ public struct AppSettings: Codable, Hashable, Sendable {
         emergencyUnlocksPerMonth: Int = 3,
         emergencyUnlocksUsed: [Date] = [],
         hasOnboarded: Bool = false,
-        screenTimeApproved: Bool = false
+        screenTimeApproved: Bool = false,
+        haptics: Bool = true
     ) {
         self.quietHours = quietHours
         self.quietHoursUpdatedAt = quietHoursUpdatedAt
@@ -559,10 +563,11 @@ public struct AppSettings: Codable, Hashable, Sendable {
         self.emergencyUnlocksUsed = emergencyUnlocksUsed
         self.hasOnboarded = hasOnboarded
         self.screenTimeApproved = screenTimeApproved
+        self.haptics = haptics
     }
 
     private enum CodingKeys: String, CodingKey {
-        case quietHours, quietHoursUpdatedAt, nagTone, emergencyUnlocksPerMonth, emergencyUnlocksUsed, hasOnboarded, screenTimeApproved
+        case quietHours, quietHoursUpdatedAt, nagTone, emergencyUnlocksPerMonth, emergencyUnlocksUsed, hasOnboarded, screenTimeApproved, haptics
     }
 
     public init(from decoder: any Decoder) throws {
@@ -574,6 +579,7 @@ public struct AppSettings: Codable, Hashable, Sendable {
         emergencyUnlocksUsed = try c.decodeIfPresent([Date].self, forKey: .emergencyUnlocksUsed) ?? []
         hasOnboarded = try c.decodeIfPresent(Bool.self, forKey: .hasOnboarded) ?? false
         screenTimeApproved = try c.decodeIfPresent(Bool.self, forKey: .screenTimeApproved) ?? false
+        haptics = try c.decodeIfPresent(Bool.self, forKey: .haptics) ?? true
     }
 
     public mutating func setQuietHours(_ new: QuietHours, at now: Date) {

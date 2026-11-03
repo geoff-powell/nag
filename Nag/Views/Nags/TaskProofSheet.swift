@@ -7,6 +7,7 @@ struct TaskProofSheet: View {
 
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var message: String?
 
     var body: some View {
@@ -39,6 +40,7 @@ struct TaskProofSheet: View {
                     .foregroundStyle(.secondary)
                 KeyScanner(key: key) { fingerprint in
                     if model.complete(taskID, scannedFingerprint: fingerprint) {
+                        model.celebrate(reduceMotion: reduceMotion)
                         dismiss()
                         return true
                     }
@@ -58,6 +60,7 @@ struct TaskProofSheet: View {
                     .foregroundStyle(.secondary)
                 Button("Done") {
                     model.complete(taskID)
+                    model.celebrate(reduceMotion: reduceMotion)
                     dismiss()
                 }
                 .buttonStyle(.borderedProminent)

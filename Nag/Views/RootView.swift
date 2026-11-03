@@ -22,6 +22,8 @@ struct RootView: View {
             }
         }
         .tint(.orange)
+        // Every completion and unlock in the app's UI reports here, wherever it happened.
+        .celebrationFeedback(model.celebration)
         .sheet(item: $router.unlock) { item in
             UnlockView(profileID: item.id)
         }
