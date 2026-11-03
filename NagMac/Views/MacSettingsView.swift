@@ -64,6 +64,16 @@ struct MacSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            if model.assistant.status != .unsupported {
+                Section {
+                    Toggle("Use Apple Intelligence", isOn: settingBinding(\.useAppleIntelligence))
+                        .disabled(!model.assistant.isAvailable)
+                } footer: {
+                    Text(model.assistant.status.settingsFooter)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section {
                 Stepper(
                     "Emergency unlocks: \(model.state.settings.emergencyUnlocksPerMonth) a month",
