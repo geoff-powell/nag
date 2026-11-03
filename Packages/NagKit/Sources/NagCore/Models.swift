@@ -542,6 +542,8 @@ public struct AppSettings: Codable, Hashable, Sendable {
     public var hasOnboarded: Bool
     /// Screen Time access was granted, so DeviceActivity can wake Nag in the background (iOS).
     public var screenTimeApproved: Bool
+    /// iPhone: ease off while a Mac is in use. Mac: take over while in use. Each device decides for itself.
+    public var deviceHandoff: Bool
 
     public init(
         quietHours: QuietHours = QuietHours(),
@@ -550,7 +552,8 @@ public struct AppSettings: Codable, Hashable, Sendable {
         emergencyUnlocksPerMonth: Int = 3,
         emergencyUnlocksUsed: [Date] = [],
         hasOnboarded: Bool = false,
-        screenTimeApproved: Bool = false
+        screenTimeApproved: Bool = false,
+        deviceHandoff: Bool = true
     ) {
         self.quietHours = quietHours
         self.quietHoursUpdatedAt = quietHoursUpdatedAt
@@ -559,10 +562,12 @@ public struct AppSettings: Codable, Hashable, Sendable {
         self.emergencyUnlocksUsed = emergencyUnlocksUsed
         self.hasOnboarded = hasOnboarded
         self.screenTimeApproved = screenTimeApproved
+        self.deviceHandoff = deviceHandoff
     }
 
     private enum CodingKeys: String, CodingKey {
         case quietHours, quietHoursUpdatedAt, nagTone, emergencyUnlocksPerMonth, emergencyUnlocksUsed, hasOnboarded, screenTimeApproved
+        case deviceHandoff
     }
 
     public init(from decoder: any Decoder) throws {
@@ -574,6 +579,7 @@ public struct AppSettings: Codable, Hashable, Sendable {
         emergencyUnlocksUsed = try c.decodeIfPresent([Date].self, forKey: .emergencyUnlocksUsed) ?? []
         hasOnboarded = try c.decodeIfPresent(Bool.self, forKey: .hasOnboarded) ?? false
         screenTimeApproved = try c.decodeIfPresent(Bool.self, forKey: .screenTimeApproved) ?? false
+        deviceHandoff = try c.decodeIfPresent(Bool.self, forKey: .deviceHandoff) ?? true
     }
 
     public mutating func setQuietHours(_ new: QuietHours, at now: Date) {
@@ -593,23 +599,28 @@ public struct NagState: Codable, Hashable, Sendable {
     public var settings: AppSettings
     /// IDs of deleted nags and when they were deleted, so deletions sync between devices.
     public var deletedTasks: [String: Date]
+    /// The latest heartbeats from iCloud, copied here so the DeviceActivity monitor (which can't read
+    /// iCloud) plans with them too.
+    public var devices: [DeviceHeartbeat]
 
     public init(
         tasks: [NagTask] = [],
         profiles: [LockProfile] = [],
         keys: [UnlockKey] = [],
         settings: AppSettings = AppSettings(),
-        deletedTasks: [String: Date] = [:]
+        deletedTasks: [String: Date] = [:],
+        devices: [DeviceHeartbeat] = []
     ) {
         self.tasks = tasks
         self.profiles = profiles
         self.keys = keys
         self.settings = settings
         self.deletedTasks = deletedTasks
+        self.devices = devices
     }
 
     private enum CodingKeys: String, CodingKey {
-        case tasks, profiles, keys, settings, deletedTasks
+        case tasks, profiles, keys, settings, deletedTasks, devices
     }
 
     public init(from decoder: any Decoder) throws {
@@ -619,6 +630,7 @@ public struct NagState: Codable, Hashable, Sendable {
         keys = try c.decodeIfPresent([UnlockKey].self, forKey: .keys) ?? []
         settings = try c.decodeIfPresent(AppSettings.self, forKey: .settings) ?? AppSettings()
         deletedTasks = try c.decodeIfPresent([String: Date].self, forKey: .deletedTasks) ?? [:]
+        devices = (try? c.decodeIfPresent([DeviceHeartbeat].self, forKey: .devices)) ?? []
     }
 
     public func task(_ id: UUID) -> NagTask? { tasks.first { $0.id == id } }

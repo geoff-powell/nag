@@ -48,6 +48,12 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Let my Mac take over", isOn: settingBinding(\.deviceHandoff))
+                } footer: {
+                    Text(DeviceHandoff.explanation)
+                }
+
+                Section {
                     Picker("Nag tone", selection: settingBinding(\.nagTone)) {
                         ForEach(NagTone.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
