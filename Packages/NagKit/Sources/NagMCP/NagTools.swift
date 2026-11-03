@@ -314,6 +314,15 @@ public struct NagTools: Sendable {
         if let source = task.source { nag["source"] = .string(source) }
         if let externalID = task.externalID { nag["external_id"] = .string(externalID) }
         if let link = task.link { nag["link"] = .string(link.absoluteString) }
+        if task.hasSteps {
+            let done = task.completedStepIDs
+            nag["steps"] = .array(task.steps.map { step in
+                var item: [String: JSONValue] = ["title": .string(step.title), "done": .bool(done.contains(step.id))]
+                if let minutes = step.estimateMinutes { item["estimate_minutes"] = .int(minutes) }
+                return .object(item)
+            })
+            if let label = task.stepLabel { nag["step"] = .string(label) }
+        }
         return .object(nag)
     }
 

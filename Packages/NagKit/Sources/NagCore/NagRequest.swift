@@ -164,6 +164,15 @@ extension NagState {
         var task = task
         task.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
         task.updatedAt = now
+        task.tidySteps()
+        let existing = tasks.first { $0.id == task.id }
+        if task.routine != nil, task.steps != existing?.steps ?? [] || existing?.routine == nil {
+            task.routine?.updatedAt = now
+        }
+        if let progress = task.routine?.progress ?? existing?.routine?.progress {
+            // Steps done while an editor was open aren't undone by saving its older copy.
+            task.routine?.progress = StepProgress.merge(existing?.routine?.progress, progress)
+        }
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
             if tasks[index].startAt != task.startAt {
                 task.snoozedUntil = nil

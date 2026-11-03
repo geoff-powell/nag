@@ -232,6 +232,9 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
     public var externalID: String?
     /// Opens the item the nag came from: a note, an event, a Muse board.
     public var link: URL?
+    /// Ordered steps, for routines shown one step at a time. Local state keeps it here; iCloud keeps it
+    /// under a separate key (see `RoutineSidecar`).
+    public var routine: NagRoutine?
 
     public init(
         id: UUID = UUID(),
@@ -247,6 +250,7 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         source: String? = nil,
         externalID: String? = nil,
         link: URL? = nil,
+        steps: [RoutineStep] = [],
         now: Date = .now
     ) {
         self.id = id
@@ -271,6 +275,7 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         self.source = source
         self.externalID = externalID
         self.link = link
+        self.routine = steps.isEmpty ? nil : NagRoutine(steps: steps, updatedAt: now)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -278,9 +283,11 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         case completedAt, lastCompletedAt, snoozedUntil, startedAt, snoozeCount
         case completionUndo, undoneCompletionAt
         case source, externalID, link
+        case routine
     }
 
-    /// `times`, `source`, `externalID` and `link` are optional so nags saved by older versions still load.
+    /// `times`, `source`, `externalID`, `link` and `routine` are optional so nags saved by older versions
+    /// still load.
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
@@ -310,6 +317,7 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         source = try c.decodeIfPresent(String.self, forKey: .source)
         externalID = try c.decodeIfPresent(String.self, forKey: .externalID)
         link = try c.decodeIfPresent(URL.self, forKey: .link)
+        routine = try? c.decodeIfPresent(NagRoutine.self, forKey: .routine)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -338,6 +346,7 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         try c.encodeIfPresent(source, forKey: .source)
         try c.encodeIfPresent(externalID, forKey: .externalID)
         try c.encodeIfPresent(link, forKey: .link)
+        try c.encodeIfPresent(routine, forKey: .routine)
     }
 }
 
