@@ -170,10 +170,11 @@ final class AppModel {
     @discardableResult
     func complete(_ id: UUID, scannedFingerprint fingerprint: String) -> Bool {
         guard let task = state.task(id) else { return false }
-        if let key = proofKey(for: task), key.fingerprint != fingerprint { return false }
+        let key = proofKey(for: task)
+        if let key, key.fingerprint != fingerprint { return false }
         // The key was verified here. NagActions has no scanned-key escape hatch so callers outside
         // the app can never bypass proof requirements.
-        mutateTask(id) { $0.complete(at: .now, calendar: calendar) }
+        mutateTask(id) { $0.complete(at: .now, calendar: calendar, keyScanned: key != nil) }
         return true
     }
 
@@ -198,6 +199,11 @@ final class AppModel {
 
     func start(_ id: UUID) {
         perform { try NagActions.start(taskID: id, store: $0, now: .now, calendar: calendar) }
+    }
+
+    /// What got done on this device, for the weekly review. Read on demand: it isn't part of `state`.
+    func loadHistory() -> CompletionHistory {
+        store.loadHistory()
     }
 
     func clearFinished() {

@@ -162,6 +162,8 @@ public struct CompletionUndo: Codable, Hashable, Sendable {
     public var startedAt: Date?
     /// The completion this snapshot can undo.
     public var completedAtMoment: Date
+    /// The completion was proven by scanning the nag's key. Kept for the completion history.
+    public var keyScanned: Bool
 
     public init(
         startAt: Date,
@@ -170,7 +172,8 @@ public struct CompletionUndo: Codable, Hashable, Sendable {
         lastCompletedAt: Date?,
         completedAt: Date?,
         startedAt: Date?,
-        completedAtMoment: Date
+        completedAtMoment: Date,
+        keyScanned: Bool = false
     ) {
         self.startAt = startAt
         self.snoozedUntil = snoozedUntil
@@ -179,10 +182,11 @@ public struct CompletionUndo: Codable, Hashable, Sendable {
         self.completedAt = completedAt
         self.startedAt = startedAt
         self.completedAtMoment = completedAtMoment
+        self.keyScanned = keyScanned
     }
 
     private enum CodingKeys: String, CodingKey {
-        case startAt, snoozedUntil, snoozeCount, lastCompletedAt, completedAt, startedAt, completedAtMoment
+        case startAt, snoozedUntil, snoozeCount, lastCompletedAt, completedAt, startedAt, completedAtMoment, keyScanned
     }
 
     public init(from decoder: any Decoder) throws {
@@ -194,6 +198,7 @@ public struct CompletionUndo: Codable, Hashable, Sendable {
         completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
         startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
         completedAtMoment = try c.decode(Date.self, forKey: .completedAtMoment)
+        keyScanned = try c.decodeIfPresent(Bool.self, forKey: .keyScanned) ?? false
     }
 }
 
