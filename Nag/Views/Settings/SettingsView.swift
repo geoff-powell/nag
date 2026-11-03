@@ -70,6 +70,9 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink("Unlock keys") { KeysView() }
+                    NavigationLink("Weekly review") { WeeklyReviewView() }
+                } footer: {
+                    Text("Your completion history for the weekly review stays on this iPhone. It isn't synced.")
                 }
 
                 Section {
