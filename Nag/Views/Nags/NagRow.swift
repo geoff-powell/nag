@@ -6,6 +6,8 @@ struct NagRow: View {
     let now: Date
     let needsScan: Bool
     let onComplete: () -> Void
+    /// Opens the routine one step at a time. Only used for nags with steps.
+    var onSteps: () -> Void = {}
 
     @Environment(AppModel.self) private var model
     /// The check was just tapped: show it filled while the completion lands.
@@ -39,6 +41,20 @@ struct NagRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
+                if let stepLabel = task.stepLabel, task.canComplete(at: now, calendar: model.calendar) {
+                    Button(action: onSteps) {
+                        Label {
+                            Text(task.currentStep.map { "\(stepLabel) · \($0.title)" } ?? stepLabel)
+                                .lineLimit(1)
+                        } icon: {
+                            Image(systemName: "list.number")
+                        }
+                        .font(.subheadline.weight(.medium))
+                    }
+                    .buttonStyle(.borderless)
+                    .tint(.orange)
+                    .accessibilityIdentifier("steps.\(task.title)")
+                }
                 Label {
                     Text(statusText)
                         .contentTransition(.opacity)
@@ -49,7 +65,7 @@ struct NagRow: View {
                 .font(.caption)
                 .foregroundStyle(statusColor)
                 .accessibilityIdentifier("status.\(task.title)")
-                if task.isRepeating || needsScan || task.source != nil {
+                if task.isRepeating || needsScan || task.source != nil || task.hasSteps {
                     tags
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -121,6 +137,9 @@ struct NagRow: View {
     private var tags: Text {
         var parts: [Text] = []
         if task.isRepeating { parts.append(Text("\(Image(systemName: "repeat")) \(task.repeatLabel)")) }
+        if task.hasSteps, task.stepLabel == nil || !task.canComplete(at: now, calendar: model.calendar) {
+            parts.append(Text("\(Image(systemName: "list.number")) \(task.steps.count) step\(task.steps.count == 1 ? "" : "s")"))
+        }
         if needsScan { parts.append(Text("\(Image(systemName: "wave.3.right")) Scan to finish")) }
         if let source = task.source { parts.append(Text("\(Image(systemName: "arrow.down.app")) \(source)")) }
         return parts.dropFirst().reduce(parts.first ?? Text("")) { Text("\($0)   \($1)") }

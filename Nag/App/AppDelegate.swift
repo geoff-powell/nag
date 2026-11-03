@@ -73,7 +73,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             if let profileID {
                 router.showUnlock(profileID)
             } else if let taskID {
-                router.showTask(taskID)
+                // Tapping a routine's nag opens it on the current step.
+                if let task = model.state.task(taskID), task.hasSteps, task.canComplete(at: .now, calendar: model.calendar) {
+                    router.showRoutine(taskID)
+                } else {
+                    router.showTask(taskID)
+                }
             }
         default:
             break

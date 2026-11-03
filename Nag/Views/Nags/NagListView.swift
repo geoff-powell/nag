@@ -111,6 +111,8 @@ struct NagListView: View {
     private func row(_ task: NagTask, now: Date) -> some View {
         NagRow(task: task, now: now, needsScan: model.proofKey(for: task) != nil) {
             complete(task)
+        } onSteps: {
+            router.showRoutine(task.id)
         }
         .contentShape(Rectangle())
         .onTapGesture { editor = .edit(task) }
@@ -120,6 +122,12 @@ struct NagListView: View {
                     Label("Done", systemImage: "checkmark")
                 }
                 .tint(.green)
+            }
+            if task.hasSteps, task.canComplete(at: now, calendar: model.calendar) {
+                Button { router.showRoutine(task.id) } label: {
+                    Label("Steps", systemImage: "list.number")
+                }
+                .tint(.orange)
             }
             if task.isOutstanding(at: now), !task.isStarted(at: now) {
                 Button { model.start(task.id) } label: {
@@ -147,6 +155,9 @@ struct NagListView: View {
                 Link(destination: link) {
                     Label("Open original", systemImage: "arrow.up.forward.app")
                 }
+            }
+            if task.hasSteps, task.canComplete(at: now, calendar: model.calendar) {
+                Button("Step by step", systemImage: "list.number") { router.showRoutine(task.id) }
             }
             Button("Duplicate", systemImage: "plus.square.on.square") {
                 withAnimation(Motion.list) { model.duplicateTask(task.id) }

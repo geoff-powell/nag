@@ -257,6 +257,20 @@ final class MacModel {
         mutateTask(id) { $0.complete(at: .now, calendar: calendar) }
     }
 
+    /// Marks a routine's current step done. The last step completes the nag, unless it needs a key scan
+    /// on the iPhone, in which case it waits there with every step done.
+    func completeStep(_ id: UUID) {
+        guard let task = state.task(id), task.hasSteps else { return }
+        let needsScan = needsPhoneScan(task)
+        let calendar = calendar
+        mutateTask(id) { task in
+            let now = Date.now
+            if task.completeCurrentStep(at: now, calendar: calendar), !needsScan {
+                task.complete(at: now, calendar: calendar)
+            }
+        }
+    }
+
     func snooze(_ id: UUID) {
         mutateTask(id) { _ = $0.snooze(at: .now) }
     }

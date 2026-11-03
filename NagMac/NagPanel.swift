@@ -27,7 +27,7 @@ final class NagPanelController {
         let state = model.state
         let visible = state.tasks
             .filter { task in
-                task.isNagging(at: now) || (task.canUndoCompletion(at: now)
+                task.isNagging(at: now) || isMidRoutine(task, now: now) || (task.canUndoCompletion(at: now)
                     && task.completionUndo.map { now.timeIntervalSince($0.completedAtMoment) < NagUndo.toastDuration } == true)
             }
             .sorted { $0.startAt < $1.startAt }
@@ -51,6 +51,7 @@ final class NagPanelController {
             collapsed: collapsedAt != nil,
             needsPhoneScan: model.needsPhoneScan,
             onDone: { [weak self] id in self?.model.complete(id) },
+            onNextStep: { [weak self] id in self?.model.completeStep(id) },
             onUndo: { [weak self] id in self?.model.undo(id) },
             onStart: { [weak self] id in self?.model.start(id) },
             onSnooze: { [weak self] id, minutes in self?.model.snooze(id, minutes: minutes) },
@@ -60,6 +61,12 @@ final class NagPanelController {
         panel.setContent(view, width: collapsedAt == nil ? 340 : 170)
         position()
         if !panel.isVisible { panel.orderFrontRegardless() }
+    }
+
+    /// A routine stays on screen between steps, while its quiet window runs, so the next step is
+    /// always one click away.
+    private func isMidRoutine(_ task: NagTask, now: Date) -> Bool {
+        task.hasSteps && task.isOutstanding(at: now) && !task.isSnoozed(at: now) && !task.completedStepIDs.isEmpty
     }
 
     private func toggleCollapsed() {
@@ -82,6 +89,7 @@ private struct NagPanelView: View {
     let collapsed: Bool
     let needsPhoneScan: (NagTask) -> Bool
     let onDone: (UUID) -> Void
+    let onNextStep: (UUID) -> Void
     let onUndo: (UUID) -> Void
     let onStart: (UUID) -> Void
     let onSnooze: (UUID, Int) -> Void
@@ -128,10 +136,16 @@ private struct NagPanelView: View {
                     Text(subtitle(for: task))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if showsStep(task) {
+                        stepCard(task)
+                    }
                     HStack {
                         if task.canUndoCompletion(at: now) {
                             Button("Undo") { onUndo(task.id) }
                                 .buttonStyle(.borderedProminent)
+                        } else if showsStep(task) {
+                            // The Next button above does the work; Done here would skip the remaining steps.
+                            EmptyView()
                         } else if needsPhoneScan(task) {
                             Label("Scan on iPhone to finish", systemImage: "iphone.radiowaves.left.and.right")
                                 .font(.caption)
@@ -166,8 +180,60 @@ private struct NagPanelView: View {
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.orange.opacity(0.6), lineWidth: 1.5))
     }
 
+    /// A routine shows its current step with a big Next button instead of Done.
+    private func showsStep(_ task: NagTask) -> Bool {
+        task.hasSteps && !task.canUndoCompletion(at: now) && !(task.allStepsDone && needsPhoneScan(task))
+    }
+
+    private func stepCard(_ task: NagTask) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(task.stepLabel ?? "")
+                    .font(.caption.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(.orange)
+                Spacer()
+                if let finish = task.estimatedFinish(at: now) {
+                    Text("Done by \(finish.formatted(date: .omitted, time: .shortened))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            ProgressView(value: Double(task.completedStepIDs.count), total: Double(task.steps.count))
+                .tint(.orange)
+            if let step = task.currentStep {
+                Text(step.title)
+                    .font(.title3.weight(.bold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .id(step.id)
+                    .transition(.push(from: .trailing))
+                if let minutes = step.estimateMinutes {
+                    Label("About \(NagFormat.minutes(minutes))", systemImage: "timer")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Button {
+                withAnimation(.snappy) { onNextStep(task.id) }
+            } label: {
+                Text(nextTitle(task))
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .tint(task.remainingSteps.count > 1 ? .orange : .green)
+            .disabled(!task.canComplete(at: now, calendar: .current))
+        }
+    }
+
+    private func nextTitle(_ task: NagTask) -> String {
+        if task.remainingSteps.count > 1 { return "Next" }
+        return needsPhoneScan(task) ? "Done, then scan on iPhone" : "Finish"
+    }
+
     private func subtitle(for task: NagTask) -> String {
         if task.canUndoCompletion(at: now) { return "Marked done" }
+        if task.allStepsDone, needsPhoneScan(task) { return "Every step done · scan on iPhone to finish" }
         if task.isStarted(at: now), let startedAt = task.startedAt {
             let checkingIn = task.isWorking(at: now) ? "" : " · checking in"
             return "Started \(NagFormat.duration(now.timeIntervalSince(startedAt))) ago\(checkingIn)"
