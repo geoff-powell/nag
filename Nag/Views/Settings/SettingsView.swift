@@ -70,6 +70,7 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink("Unlock keys") { KeysView() }
+                    NavigationLink("Accountability buddy") { BuddyView() }
                 }
 
                 Section {

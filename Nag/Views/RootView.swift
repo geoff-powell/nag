@@ -34,6 +34,16 @@ struct RootView: View {
         .sheet(isPresented: $router.newNag) {
             TaskEditorView(task: nil)
         }
+        .sheet(isPresented: $router.buddy) {
+            NavigationStack {
+                BuddyView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { router.buddy = false }
+                        }
+                    }
+            }
+        }
         .alert("Couldn't open that link", isPresented: hasLinkError) {
             Button("OK") { router.linkError = nil }
         } message: {

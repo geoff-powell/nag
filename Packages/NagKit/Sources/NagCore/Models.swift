@@ -593,23 +593,27 @@ public struct NagState: Codable, Hashable, Sendable {
     public var settings: AppSettings
     /// IDs of deleted nags and when they were deleted, so deletions sync between devices.
     public var deletedTasks: [String: Date]
+    /// Accountability buddy settings. Local to this device; the shared-item set also syncs on its own key.
+    public var buddy: BuddySettings
 
     public init(
         tasks: [NagTask] = [],
         profiles: [LockProfile] = [],
         keys: [UnlockKey] = [],
         settings: AppSettings = AppSettings(),
-        deletedTasks: [String: Date] = [:]
+        deletedTasks: [String: Date] = [:],
+        buddy: BuddySettings = BuddySettings()
     ) {
         self.tasks = tasks
         self.profiles = profiles
         self.keys = keys
         self.settings = settings
         self.deletedTasks = deletedTasks
+        self.buddy = buddy
     }
 
     private enum CodingKeys: String, CodingKey {
-        case tasks, profiles, keys, settings, deletedTasks
+        case tasks, profiles, keys, settings, deletedTasks, buddy
     }
 
     public init(from decoder: any Decoder) throws {
@@ -619,6 +623,7 @@ public struct NagState: Codable, Hashable, Sendable {
         keys = try c.decodeIfPresent([UnlockKey].self, forKey: .keys) ?? []
         settings = try c.decodeIfPresent(AppSettings.self, forKey: .settings) ?? AppSettings()
         deletedTasks = try c.decodeIfPresent([String: Date].self, forKey: .deletedTasks) ?? [:]
+        buddy = (try? c.decodeIfPresent(BuddySettings.self, forKey: .buddy)) ?? BuddySettings()
     }
 
     public func task(_ id: UUID) -> NagTask? { tasks.first { $0.id == id } }
