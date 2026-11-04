@@ -11,6 +11,8 @@ public final class SharedStore: @unchecked Sendable {
 
     private var fileURL: URL { directory.appending(path: "state.json") }
     private var lockURL: URL { directory.appending(path: "state.lock") }
+    /// The completion history, kept apart from the nags so extensions that only need the nags never read it.
+    private var historyURL: URL { directory.appending(path: "history.json") }
 
     public init(directory: URL, groupID: String? = nil) {
         self.directory = directory
@@ -37,7 +39,13 @@ public final class SharedStore: @unchecked Sendable {
         withFileLock { read() }
     }
 
-    /// Reads the latest state, applies `body`, and writes the result if it changed.
+    /// This device's completion history. Not synced: each device keeps its own.
+    public func loadHistory() -> CompletionHistory {
+        withFileLock { readHistory() }
+    }
+
+    /// Reads the latest state, applies `body`, and writes the result if it changed. Completions and
+    /// undos in the change are logged to the completion history, whichever process made them.
     /// Don't call `load` or `update` from inside `body`: the lock isn't reentrant.
     @discardableResult
     public func update<T>(_ body: (inout NagState) throws -> T) rethrows -> T {
@@ -48,6 +56,7 @@ public final class SharedStore: @unchecked Sendable {
             let result = try body(&state)
             if state != before {
                 write(state)
+                logCompletions(from: before, to: state)
                 changed = true
             }
             return result
@@ -82,11 +91,35 @@ public final class SharedStore: @unchecked Sendable {
     }
 
     private func write(_ state: NagState) {
+        writeJSON(state, to: fileURL)
+    }
+
+    private func writeJSON(_ value: some Encodable, to url: URL) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        guard let data = try? encoder.encode(state) else { return }
+        guard let data = try? encoder.encode(value) else { return }
         // Extensions can run while the phone is locked, so the file must stay readable after first unlock.
-        try? data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+    }
+
+    private func logCompletions(from before: NagState, to after: NagState) {
+        let changes = CompletionHistory.changes(from: before, to: after)
+        guard !changes.isEmpty else { return }
+        var history = readHistory()
+        history.apply(changes)
+        history.prune(now: Date(), calendar: .current)
+        writeJSON(history, to: historyURL)
+    }
+
+    private func readHistory() -> CompletionHistory {
+        guard let data = try? Data(contentsOf: historyURL) else { return CompletionHistory() }
+        do {
+            return try JSONDecoder().decode(CompletionHistory.self, from: data)
+        } catch {
+            let backup = directory.appending(path: "history-unreadable-\(Int(Date().timeIntervalSince1970)).json")
+            try? data.write(to: backup)
+            return CompletionHistory()
+        }
     }
 
     private func withFileLock<T>(_ body: () throws -> T) rethrows -> T {
