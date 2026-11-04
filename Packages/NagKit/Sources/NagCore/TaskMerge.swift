@@ -94,5 +94,6 @@ extension NagState {
     public mutating func deleteTask(_ id: UUID, at now: Date) {
         tasks.removeAll { $0.id == id }
         deletedTasks[id.uuidString] = now
+        wording[id.uuidString] = nil
     }
 }

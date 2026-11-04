@@ -82,6 +82,7 @@ public enum NagEngine {
             tasks: state.tasks,
             quietHours: state.settings.quietHours,
             tone: state.settings.nagTone,
+            wording: state.wording,
             now: now
         )
 
