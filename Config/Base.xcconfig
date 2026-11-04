@@ -2,6 +2,8 @@
 #include "Signing.xcconfig"
 
 APP_GROUP_ID = group.$(NAG_BUNDLE_ID)
+// Accountability buddy sharing (iPhone only for now).
+NAG_CLOUDKIT_CONTAINER = iCloud.$(NAG_BUNDLE_ID)
 
 IPHONEOS_DEPLOYMENT_TARGET = 18.0
 MACOSX_DEPLOYMENT_TARGET = 15.0

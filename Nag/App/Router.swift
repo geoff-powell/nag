@@ -36,12 +36,20 @@ final class Router {
     var newNag = false
     /// Why the last link couldn't be opened.
     var linkError: String?
+    /// Presents the accountability buddy screen, after accepting an invitation.
+    var buddy = false
 
     func resetPresentation() {
         unlock = nil
         proof = nil
         incoming = nil
         newNag = false
+        buddy = false
+    }
+
+    func showBuddy() {
+        resetPresentation()
+        buddy = true
     }
 
     func showUnlock(_ profileID: UUID) {

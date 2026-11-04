@@ -13,6 +13,10 @@
 			</array>
 		</dict>
 	</array>
+	<key>CKSharingSupported</key>
+	<true/>
+	<key>NagCloudContainer</key>
+	<string>$(NAG_CLOUDKIT_CONTAINER)</string>
 	<key>NagAppGroup</key>
 	<string>$(APP_GROUP_ID)</string>
 	<key>NSCameraUsageDescription</key>
@@ -28,6 +32,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
+		<string>remote-notification</string>
 	</array>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
