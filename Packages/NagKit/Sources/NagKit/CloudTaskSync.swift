@@ -8,6 +8,9 @@ import NagCore
 /// Without the iCloud entitlement this quietly does nothing.
 public final class CloudTaskSync: @unchecked Sendable {
     public static let storageKey = "nag.tasks.v1"
+    /// Place triggers by nag ID, kept apart from the nags so builds that predate places (which drop
+    /// fields they don't know when saving) can't erase them. See `PlaceTriggerRecord`.
+    public static let placeTriggersKey = "nag.placeTriggers.v1"
 
     private let store: SharedStore
     private let cloud: NSUbiquitousKeyValueStore
@@ -40,9 +43,13 @@ public final class CloudTaskSync: @unchecked Sendable {
 
     /// Merges the local and iCloud copies and writes back to whichever side is behind.
     public func reconcile(now: Date = .now) {
-        let remote = cloud.data(forKey: Self.storageKey)
+        let remoteTasks = cloud.data(forKey: Self.storageKey)
             .flatMap { try? JSONDecoder().decode(SyncedTasks.self, from: $0) }
             ?? SyncedTasks()
+        let remoteTriggers = cloud.data(forKey: Self.placeTriggersKey)
+            .flatMap { try? JSONDecoder().decode([String: PlaceTriggerRecord].self, from: $0) }
+            ?? [:]
+        let remote = remoteTasks.applyingPlaceTriggers(remoteTriggers)
 
         var localChanged = false
         let merged = store.update { state -> SyncedTasks in
@@ -55,8 +62,12 @@ public final class CloudTaskSync: @unchecked Sendable {
             return merged
         }
 
-        if merged != remote, let data = try? JSONEncoder().encode(merged) {
+        if merged != remoteTasks, let data = try? JSONEncoder().encode(merged) {
             cloud.set(data, forKey: Self.storageKey)
+        }
+        let triggers = merged.placeTriggerRecords
+        if triggers != remoteTriggers, let data = try? JSONEncoder().encode(triggers) {
+            cloud.set(data, forKey: Self.placeTriggersKey)
         }
         if localChanged { onLocalChange() }
     }

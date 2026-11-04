@@ -164,6 +164,10 @@ extension NagState {
         var task = task
         task.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
         task.updatedAt = now
+        let previousTrigger = tasks.first { $0.id == task.id }?.placeTrigger
+        if task.placeTrigger != previousTrigger {
+            task.placeTriggerChangedAt = now
+        }
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
             if tasks[index].startAt != task.startAt {
                 task.snoozedUntil = nil

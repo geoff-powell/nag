@@ -137,7 +137,8 @@ extension LockProfile {
 }
 
 public enum LockMaintenance {
-    /// Brings every lock up to date: expired unlocks come back, schedules start and stop, due nags switch
+    /// Brings every lock up to date: expired unlocks come back, schedules start and stop, arriving at a
+    /// place switches on place locks and leaving switches them off, due nags switch
     /// on nag-triggered locks, and locks whose requirements are met unlock themselves.
     /// Returns the locks that were unlocked automatically.
     /// - Parameter tolerance: Treat unlock expiries and schedule boundaries this close ahead as reached.
@@ -160,11 +161,16 @@ public enum LockMaintenance {
                 case .manual: true
                 case .schedule: profile.schedule?.windowStart(containing: lookahead, calendar: calendar) != nil
                 case .nags: nagsDue
+                case .place: state.resolvedPlace(profile.place).map { state.isInside($0.id) } ?? false
                 }
                 profile.status = stillWanted ? .locked(LockSession(startedAt: min(until, now), trigger: session.trigger)) : .off
             }
 
             profile.applySchedule(at: now, calendar: calendar, lookahead: tolerance)
+            profile.applyPlace(
+                presence: state.resolvedPlace(profile.place).flatMap { state.placePresence[$0.id.uuidString] },
+                now: now
+            )
 
             if profile.lockWhileNagsDue, nagsDue, case .off = profile.status,
                (profile.autoLockPausedUntil ?? .distantPast) <= now {

@@ -86,6 +86,10 @@ struct LockEditorView: View {
 
                     scheduleSection
 
+                    if !model.state.places.isEmpty || profile.place != nil {
+                        placeSection
+                    }
+
                     Section {
                         Toggle("Lock while nags are due", isOn: $profile.lockWhileNagsDue)
                             .onChange(of: profile.lockWhileNagsDue) { _, on in
@@ -190,6 +194,34 @@ struct LockEditorView: View {
                     .foregroundStyle(.red)
             } else if profile.schedule != nil {
                 Text("Switches on at the start of each window. Earning an unlock keeps it open for the rest of that window.")
+            }
+        }
+    }
+
+    private var placeSection: some View {
+        Section {
+            Toggle("Lock at a place", isOn: Binding(
+                get: { profile.place != nil },
+                set: { profile.place = $0 ? model.state.places.first?.ref : nil }
+            ))
+            if let current = profile.place {
+                Picker("Place", selection: Binding(
+                    get: { current.id },
+                    set: { id in
+                        if let place = model.state.place(id) { profile.place = place.ref }
+                    }
+                )) {
+                    if model.state.place(current.id) == nil {
+                        Text(model.state.placeName(current)).tag(current.id)
+                    }
+                    ForEach(model.state.places) { Text($0.name).tag($0.id) }
+                }
+            }
+        } header: {
+            Text("Place")
+        } footer: {
+            if profile.place != nil {
+                Text("Switches on when you arrive and off when you leave. Earning an unlock keeps it open until your next visit.")
             }
         }
     }

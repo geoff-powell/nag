@@ -6,5 +6,7 @@
 	<true/>
 	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
 	<string>$(TeamIdentifierPrefix)$(NAG_BUNDLE_ID)</string>
+	<key>com.apple.security.personal-information.location</key>
+	<true/>
 </dict>
 </plist>

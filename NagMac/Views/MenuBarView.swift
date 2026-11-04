@@ -56,9 +56,15 @@ struct MenuBarView: View {
                     HStack {
                         Text(task.title).lineLimit(1)
                         Spacer()
-                        Text(task.startAt, format: .relative(presentation: .named))
-                            .foregroundStyle(.secondary)
-                            .font(.caption)
+                        Group {
+                            if task.isAwaitingPlace, let trigger = task.placeTrigger {
+                                Text(trigger.event.shortLabel(model.state.placeName(trigger.place)))
+                            } else {
+                                Text(task.startAt, format: .relative(presentation: .named))
+                            }
+                        }
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
                     }
                 }
             }

@@ -17,6 +17,10 @@
 	<string>$(APP_GROUP_ID)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Nag uses the camera to scan the QR code or barcode you picked as an unlock key.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Nag checks when you arrive at or leave the places you save, to start nags and locks there.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>With access all the time, place nags and locks work even when Nag is closed. Nag only checks when you arrive at or leave the places you save.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>Nag counts your steps when a lock asks you to go for a walk before unlocking.</string>
 	<key>NFCReaderUsageDescription</key>
