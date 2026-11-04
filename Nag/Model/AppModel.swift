@@ -177,6 +177,17 @@ final class AppModel {
         return true
     }
 
+    /// Marks a routine's current step done. The last step completes the nag, unless it needs a key scan,
+    /// which is returned so the caller can ask for it.
+    @discardableResult
+    func completeStep(_ id: UUID) -> NagActions.StepOutcome? {
+        var outcome: NagActions.StepOutcome?
+        perform { store in
+            outcome = try NagActions.completeStep(taskID: id, store: store, now: .now, calendar: calendar)
+        }
+        return outcome
+    }
+
     func reopen(_ id: UUID) {
         mutateTask(id) { $0.reopen(at: .now) }
     }

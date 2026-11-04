@@ -156,6 +156,11 @@ private struct MenuNagRow: View {
     }
 
     private var status: String {
+        let step = task.currentStep.flatMap { step in task.stepLabel.map { "\($0): \(step.title) · " } } ?? ""
+        return step + baseStatus
+    }
+
+    private var baseStatus: String {
         if task.isSnoozed(at: now) {
             return "Snoozed until \(task.snoozedUntil?.formatted(date: .omitted, time: .shortened) ?? "")"
         }

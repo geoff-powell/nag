@@ -103,8 +103,19 @@ private struct MacNagRow: View {
                 Text(status)
                     .font(.caption)
                     .foregroundStyle(task.isOutstanding(at: now) && !task.isSnoozed(at: now) ? Color.orange : Color.secondary)
+                if let stepLabel = task.stepLabel, task.canComplete(at: now, calendar: model.calendar) {
+                    Label(task.currentStep.map { "\(stepLabel) · \($0.title)" } ?? stepLabel, systemImage: "list.number")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
             Spacer()
+            if task.hasSteps, task.currentStep != nil, task.canComplete(at: now, calendar: model.calendar) {
+                Button("Next step") { model.completeStep(task.id) }
+                    .controlSize(.small)
+                    .help(task.remainingSteps.count > 1 ? "Mark this step done" : "Mark the last step done")
+            }
             if model.needsPhoneScan(task) {
                 Image(systemName: "iphone.radiowaves.left.and.right")
                     .foregroundStyle(.secondary)
@@ -112,6 +123,10 @@ private struct MacNagRow: View {
             }
             if task.isRepeating {
                 Image(systemName: "repeat").foregroundStyle(.secondary).help(task.repeatLabel)
+            }
+            if task.hasSteps {
+                Image(systemName: "list.number").foregroundStyle(.secondary)
+                    .help("\(task.steps.count) step\(task.steps.count == 1 ? "" : "s")")
             }
             if let source = task.source {
                 Image(systemName: "arrow.down.app").foregroundStyle(.secondary).help("From \(source)")
@@ -243,6 +258,7 @@ struct MacTaskEditor: View {
                         }
                     }
                 }
+                stepsSection
                 Section("When") {
                     if !isCustom {
                         if isNew { Toggle("Start nagging now", isOn: $startNow) }
@@ -333,12 +349,68 @@ struct MacTaskEditor: View {
             }
             .padding()
         }
-        .frame(width: 560, height: 600)
+        .frame(width: 560, height: 640)
         .onChange(of: task.repeatRule) { _, rule in
             if rule == .custom, task.times.isEmpty {
                 task.times = [NagTime(minute: minuteOfDay(task.startAt))]
             }
         }
+    }
+
+    private var stepsSection: some View {
+        Section {
+            ForEach(Array(task.steps.enumerated()), id: \.element.id) { index, step in
+                HStack {
+                    Text("\(index + 1).")
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    TextField("Step", text: stepBinding(step.id, \.title))
+                        .labelsHidden()
+                    Picker("Estimate", selection: stepBinding(step.id, \.estimateMinutes)) {
+                        Text("No estimate").tag(Int?.none)
+                        ForEach([1, 2, 3, 5, 10, 15, 20, 30, 45, 60], id: \.self) { Text(NagFormat.minutes($0)).tag(Int?.some($0)) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    Button("Move up", systemImage: "chevron.up") { moveStep(at: index, by: -1) }
+                        .disabled(index == 0)
+                    Button("Move down", systemImage: "chevron.down") { moveStep(at: index, by: 1) }
+                        .disabled(index == task.steps.count - 1)
+                    Button("Remove step", systemImage: "minus.circle") {
+                        task.steps.removeAll { $0.id == step.id }
+                    }
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+            }
+            .onMove { from, to in task.steps.move(fromOffsets: from, toOffset: to) }
+            Button("Add step", systemImage: "plus") {
+                task.steps.append(RoutineStep(title: ""))
+            }
+        } header: {
+            Text("Steps")
+        } footer: {
+            Text(task.steps.isEmpty
+                ? "Break a routine into small steps. Nag shows one at a time, and the nag is done after the last one."
+                : "Shown one at a time in the reminder panel. Each step done pauses nagging for the next step's estimate.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func stepBinding<Value>(_ id: UUID, _ keyPath: WritableKeyPath<RoutineStep, Value>) -> Binding<Value> {
+        Binding(
+            get: { task.steps.first { $0.id == id }.map { $0[keyPath: keyPath] } ?? RoutineStep(title: "")[keyPath: keyPath] },
+            set: { value in
+                guard let index = task.steps.firstIndex(where: { $0.id == id }) else { return }
+                task.steps[index][keyPath: keyPath] = value
+            }
+        )
+    }
+
+    private func moveStep(at index: Int, by offset: Int) {
+        let target = index + offset
+        guard task.steps.indices.contains(target) else { return }
+        task.steps.swapAt(index, target)
     }
 
     private var timesSection: some View {

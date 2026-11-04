@@ -72,6 +72,7 @@ public enum TaskMerge {
             newer.startedAt = older.startedAt
             newer.completionUndo = older.completionUndo
         }
+        newer.routine = NagRoutine.merge(a.routine, b.routine)
         return newer
     }
 

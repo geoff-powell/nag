@@ -28,6 +28,9 @@ struct RootView: View {
         .sheet(item: $router.proof) { item in
             TaskProofSheet(taskID: item.id)
         }
+        .sheet(item: $router.routine) { item in
+            RoutineView(taskID: item.id)
+        }
         .sheet(item: $router.incoming) { item in
             TaskEditorView(draft: item.draft)
         }

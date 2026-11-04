@@ -28,6 +28,8 @@ final class Router {
     var unlock: PresentedID?
     /// Presents the key scan that proves a nag is done.
     var proof: PresentedID?
+    /// Presents a routine one step at a time.
+    var routine: PresentedID?
     /// A nag to bring to attention in the list.
     var focusedTask: UUID?
     /// A nag from a link, shown in the editor so nothing is added without the user seeing it.
@@ -40,6 +42,7 @@ final class Router {
     func resetPresentation() {
         unlock = nil
         proof = nil
+        routine = nil
         incoming = nil
         newNag = false
     }
@@ -54,6 +57,12 @@ final class Router {
         resetPresentation()
         tab = .nags
         proof = PresentedID(id: taskID)
+    }
+
+    func showRoutine(_ taskID: UUID) {
+        resetPresentation()
+        tab = .nags
+        routine = PresentedID(id: taskID)
     }
 
     func showTask(_ taskID: UUID) {

@@ -133,8 +133,10 @@ public struct NagPlanner: Sendable {
             let checkIn = task.isStarted(at: now)
             if checkIn, let workingUntil = task.workingUntil() { considerWake(workingUntil) }
             let category = NagID.Category.forTask(task, canSnooze: (task.snoozesLeft ?? 1) > 0)
+            let step = NagMessages.stepLine(for: task)
             let contentKey = StableHash.hex(
                 "\(task.title)|\(task.notes)|\(category)|\(task.style.breakThroughFocus)|\(effectiveTone.rawValue)|\(checkIn)"
+                    + (step.map { "|\($0)" } ?? "")
             )
             let prefix = "\(NagID.nagNotificationPrefix)\(task.id.uuidString)|"
 
@@ -148,9 +150,9 @@ public struct NagPlanner: Sendable {
                     taskID: task.id,
                     trigger: .every(seconds: seconds),
                     title: task.title,
-                    body: checkIn
+                    body: NagMessages.withStep(step, checkIn
                         ? NagMessages.checkInRepeatingBody(title: task.title, tone: effectiveTone)
-                        : NagMessages.repeatingBody(title: task.title, tier: tier, tone: effectiveTone),
+                        : NagMessages.repeatingBody(title: task.title, tier: tier, tone: effectiveTone)),
                     category: category,
                     timeSensitive: task.style.breakThroughFocus
                 ))
@@ -171,7 +173,7 @@ public struct NagPlanner: Sendable {
                     taskID: task.id,
                     trigger: .at(date),
                     title: task.title,
-                    body: checkIn
+                    body: NagMessages.withStep(step, checkIn
                         ? NagMessages.checkInBody(
                             title: task.title,
                             number: number,
@@ -184,7 +186,7 @@ public struct NagPlanner: Sendable {
                             number: number,
                             overdue: overdue,
                             tone: effectiveTone
-                        ),
+                        )),
                     category: category,
                     timeSensitive: task.style.breakThroughFocus
                 )))
@@ -260,6 +262,19 @@ public enum NagMessages {
         let late = NagFormat.duration(overdue)
         let lines = lines(for: tone, tier: tier(overdue: overdue), number: number, late: late)
         return lines[number % lines.count]
+    }
+
+    /// "Step 2 of 5: Shoes on" for a routine, or `nil` for a plain nag.
+    public static func stepLine(for task: NagTask) -> String? {
+        guard let label = task.stepLabel else { return nil }
+        guard let step = task.currentStep else { return label }
+        return "\(label): \(step.title)"
+    }
+
+    /// Puts the current step first, so it shows even when the body is cut short.
+    public static func withStep(_ step: String?, _ body: String) -> String {
+        guard let step else { return body }
+        return "\(step)\n\(body)"
     }
 
     public static func repeatingBody(title: String, tier: Int, tone: NagTone = .standard) -> String {

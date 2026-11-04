@@ -11,6 +11,7 @@ struct TaskEditorView: View {
     @State private var startNow: Bool
     @State private var limitSnoozes: Bool
     @State private var confirmDelete = false
+    @FocusState private var focusedStep: UUID?
 
     init(task: NagTask?) {
         self.init(task: task ?? NagTask(title: ""), original: task, startNow: task == nil)
@@ -32,6 +33,7 @@ struct TaskEditorView: View {
     static let intervals = [1, 2, 5, 10, 15, 30, 60]
     static let snoozeLengths = [5, 10, 15, 30, 60]
     static let workLengths = [10, 15, 25, 30, 45, 60, 90]
+    static let stepEstimates = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60]
 
     private var isCustom: Bool { task.repeatRule == .custom }
 
@@ -69,6 +71,8 @@ struct TaskEditorView: View {
                     TextField("Notes, or the first tiny step", text: $task.notes, axis: .vertical)
                         .lineLimit(1...4)
                 }
+
+                stepsSection
 
                 if task.source != nil || task.link != nil {
                     Section {
@@ -239,6 +243,60 @@ struct TaskEditorView: View {
             }
             .animation(Motion.quick, value: task.hasValidSchedule)
         }
+    }
+
+    private var stepsSection: some View {
+        Section {
+            ForEach($task.steps) { $step in
+                HStack {
+                    TextField("Step", text: $step.title)
+                        .focused($focusedStep, equals: step.id)
+                        .submitLabel(.next)
+                        .onSubmit(addStep)
+                        .accessibilityIdentifier("step.title")
+                    Picker("Estimate", selection: $step.estimateMinutes) {
+                        Text("No estimate").tag(Int?.none)
+                        ForEach(Self.stepEstimates, id: \.self) { Text(NagFormat.minutes($0)).tag(Int?.some($0)) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .accessibilityIdentifier("step.estimate")
+                }
+            }
+            .onMove { from, to in
+                withAnimation(Motion.list) { task.steps.move(fromOffsets: from, toOffset: to) }
+            }
+            .onDelete { offsets in
+                withAnimation(Motion.list) { task.steps.remove(atOffsets: offsets) }
+            }
+            Button("Add step", systemImage: "plus", action: addStep)
+                .accessibilityIdentifier("addStep")
+        } header: {
+            HStack {
+                Text("Steps")
+                Spacer()
+                if task.steps.count > 1 {
+                    EditButton()
+                        .font(.caption)
+                        .textCase(nil)
+                }
+            }
+        } footer: {
+            if task.steps.isEmpty {
+                Text("Break a routine into small steps. Nag shows one at a time, and the nag is done after the last one.")
+            } else {
+                let total = task.steps.compactMap(\.estimateMinutes).reduce(0, +)
+                Text(total > 0
+                    ? "About \(NagFormat.minutes(total)) in all. Each step done pauses nagging for the next step's estimate."
+                    : "Each step done pauses nagging for a while. Add estimates to see when you'll finish.")
+            }
+        }
+    }
+
+    private func addStep() {
+        let step = RoutineStep(title: "")
+        withAnimation(Motion.list) { task.steps.append(step) }
+        focusedStep = step.id
     }
 
     private func minuteOfDay(_ date: Date) -> Int {
