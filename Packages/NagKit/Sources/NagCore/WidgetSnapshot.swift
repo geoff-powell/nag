@@ -7,6 +7,7 @@ public struct NagSummary: Hashable, Sendable, Identifiable {
     public var isOverdue: Bool
     public var isSnoozed: Bool
     public var isStarted: Bool
+    /// False when completion requires a key scan, even if the underlying task is otherwise completable.
     public var canComplete: Bool
     public var canSnooze: Bool
     public var needsKeyScan: Bool
@@ -39,6 +40,7 @@ public struct LockSummary: Hashable, Sendable, Identifiable {
     public var name: String
     public var symbol: String
     public var isShielding: Bool
+    public var isLockEngaged: Bool
     public var openUntil: Date?
     public var waitEndsAt: Date?
     public var stepsRemaining: Int
@@ -48,6 +50,7 @@ public struct LockSummary: Hashable, Sendable, Identifiable {
         name: String,
         symbol: String,
         isShielding: Bool,
+        isLockEngaged: Bool = true,
         openUntil: Date?,
         waitEndsAt: Date?,
         stepsRemaining: Int
@@ -56,9 +59,43 @@ public struct LockSummary: Hashable, Sendable, Identifiable {
         self.name = name
         self.symbol = symbol
         self.isShielding = isShielding
+        self.isLockEngaged = isLockEngaged
         self.openUntil = openUntil
         self.waitEndsAt = waitEndsAt
         self.stepsRemaining = stepsRemaining
+    }
+}
+
+private extension LockSummary {
+    static func make(
+        from profile: LockProfile,
+        state: NagState,
+        now: Date,
+        calendar: Calendar
+    ) -> LockSummary {
+        let waitMinutes = profile.requirements.compactMap { requirement -> Int? in
+            if case .wait(let minutes) = requirement.kind { return minutes }
+            return nil
+        }.max()
+        let waitEndsAt = profile.session?.unlockRequestedAt.flatMap { requested in
+            waitMinutes.map { requested.addingTimeInterval(TimeInterval($0 * 60)) }
+        }
+        return LockSummary(
+            id: profile.id,
+            name: profile.name,
+            symbol: profile.symbol,
+            isShielding: profile.isShielding(at: now),
+            isLockEngaged: profile.isEngaged,
+            openUntil: profile.unlockedUntil,
+            waitEndsAt: waitEndsAt,
+            stepsRemaining: UnlockEvaluator.evaluate(
+                profile,
+                state: state,
+                steps: nil,
+                now: now,
+                calendar: calendar
+            ).filter { !$0.isMet }.count
+        )
     }
 }
 
@@ -110,6 +147,7 @@ public struct WidgetSnapshot: Hashable, Sendable {
             consider(task.workingUntil())
 
             guard task.isOutstanding(at: now) else { continue }
+            let actions = NagActionAvailability.make(task: task, state: state, now: now, calendar: calendar)
             allDue.append(NagSummary(
                 id: task.id,
                 title: task.title,
@@ -117,9 +155,9 @@ public struct WidgetSnapshot: Hashable, Sendable {
                 isOverdue: task.isNagging(at: now),
                 isSnoozed: task.isSnoozed(at: now),
                 isStarted: task.isStarted(at: now),
-                canComplete: task.canComplete(at: now, calendar: calendar),
-                canSnooze: task.canSnooze(at: now),
-                needsKeyScan: needsKeyScan(task, in: state)
+                canComplete: actions.canComplete,
+                canSnooze: actions.canSnooze,
+                needsKeyScan: actions.needsKeyScan
             ))
         }
 
@@ -134,32 +172,11 @@ public struct WidgetSnapshot: Hashable, Sendable {
         var locks: [LockSummary] = []
         locks.reserveCapacity(state.profiles.count)
         for profile in state.profiles where profile.isEngaged {
-            let waitMinutes = profile.requirements.compactMap { requirement -> Int? in
-                if case .wait(let minutes) = requirement.kind { return minutes }
-                return nil
-            }.max()
-            let waitEndsAt = profile.session?.unlockRequestedAt.flatMap { requested in
-                waitMinutes.map { requested.addingTimeInterval(TimeInterval($0 * 60)) }
-            }
             let openUntil = profile.unlockedUntil
             consider(openUntil)
-            consider(waitEndsAt)
-            let stepsRemaining = UnlockEvaluator.evaluate(
-                profile,
-                state: state,
-                steps: nil,
-                now: now,
-                calendar: calendar
-            ).filter { !$0.isMet }.count
-            locks.append(LockSummary(
-                id: profile.id,
-                name: profile.name,
-                symbol: profile.symbol,
-                isShielding: profile.isShielding(at: now),
-                openUntil: openUntil,
-                waitEndsAt: waitEndsAt,
-                stepsRemaining: stepsRemaining
-            ))
+            let summary = LockSummary.make(from: profile, state: state, now: now, calendar: calendar)
+            consider(summary.waitEndsAt)
+            locks.append(summary)
         }
         locks.sort {
             if $0.isShielding != $1.isShielding { return $0.isShielding }
@@ -198,5 +215,32 @@ public struct WidgetSnapshot: Hashable, Sendable {
             stepsRemaining: 2
         )
         return WidgetSnapshot(dueCount: 1, oldestOverdue: due, due: [due], locks: [lock], nextChange: nil)
+    }
+}
+
+/// What Nag's Control Center controls display. `lockID` is nil for an unconfigured control.
+public struct ControlState: Hashable, Sendable {
+    public var dueCount: Int
+    public var lock: LockSummary?
+    /// Engaged rather than shielding, so a temporarily unlocked lock honestly remains on.
+    public var isLockEngaged: Bool
+
+    /// Fixed values for control previews in the gallery.
+    public static func preview(dueCount: Int, lock: LockSummary?, isLockEngaged: Bool) -> ControlState {
+        ControlState(dueCount: dueCount, lock: lock, isLockEngaged: isLockEngaged)
+    }
+
+    public static func make(
+        from state: NagState,
+        lockID: UUID?,
+        now: Date,
+        calendar: Calendar
+    ) -> ControlState {
+        let profile = lockID.flatMap(state.profile)
+        return ControlState(
+            dueCount: WidgetSnapshot.make(from: state, now: now, calendar: calendar).dueCount,
+            lock: profile.map { LockSummary.make(from: $0, state: state, now: now, calendar: calendar) },
+            isLockEngaged: profile?.isEngaged ?? false
+        )
     }
 }

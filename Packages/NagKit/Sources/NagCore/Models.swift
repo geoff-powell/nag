@@ -542,6 +542,8 @@ public struct AppSettings: Codable, Hashable, Sendable {
     public var hasOnboarded: Bool
     /// Screen Time access was granted, so DeviceActivity can wake Nag in the background (iOS).
     public var screenTimeApproved: Bool
+    /// Live Activities are opt-in: off until the user turns them on in Settings.
+    public var liveActivitiesEnabled: Bool
 
     public init(
         quietHours: QuietHours = QuietHours(),
@@ -550,7 +552,8 @@ public struct AppSettings: Codable, Hashable, Sendable {
         emergencyUnlocksPerMonth: Int = 3,
         emergencyUnlocksUsed: [Date] = [],
         hasOnboarded: Bool = false,
-        screenTimeApproved: Bool = false
+        screenTimeApproved: Bool = false,
+        liveActivitiesEnabled: Bool = false
     ) {
         self.quietHours = quietHours
         self.quietHoursUpdatedAt = quietHoursUpdatedAt
@@ -559,10 +562,12 @@ public struct AppSettings: Codable, Hashable, Sendable {
         self.emergencyUnlocksUsed = emergencyUnlocksUsed
         self.hasOnboarded = hasOnboarded
         self.screenTimeApproved = screenTimeApproved
+        self.liveActivitiesEnabled = liveActivitiesEnabled
     }
 
     private enum CodingKeys: String, CodingKey {
         case quietHours, quietHoursUpdatedAt, nagTone, emergencyUnlocksPerMonth, emergencyUnlocksUsed, hasOnboarded, screenTimeApproved
+        case liveActivitiesEnabled
     }
 
     public init(from decoder: any Decoder) throws {
@@ -574,6 +579,7 @@ public struct AppSettings: Codable, Hashable, Sendable {
         emergencyUnlocksUsed = try c.decodeIfPresent([Date].self, forKey: .emergencyUnlocksUsed) ?? []
         hasOnboarded = try c.decodeIfPresent(Bool.self, forKey: .hasOnboarded) ?? false
         screenTimeApproved = try c.decodeIfPresent(Bool.self, forKey: .screenTimeApproved) ?? false
+        liveActivitiesEnabled = try c.decodeIfPresent(Bool.self, forKey: .liveActivitiesEnabled) ?? false
     }
 
     public mutating func setQuietHours(_ new: QuietHours, at now: Date) {

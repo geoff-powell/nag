@@ -115,6 +115,8 @@ public enum NagEngine {
 
     /// For DeviceActivity callbacks, which are synchronous: runs `sync` and waits for it, bounded so the
     /// extension is never stuck.
+    /// Live Activities are deliberately excluded: v1 keeps ActivityKit writes in the foreground app
+    /// instead of relying on the monitor extension's tight and unverified execution budget.
     public static func handleActivityCallback(store: SharedStore = .shared) {
         let finished = DispatchSemaphore(value: 0)
         Task.detached {

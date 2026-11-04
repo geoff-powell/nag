@@ -37,6 +37,15 @@ struct NagEntity: AppEntity, Identifiable {
         isSnoozed = summary.isSnoozed
         needsKeyScan = summary.needsKeyScan
     }
+
+    init(activityContent content: NagActivityContent) {
+        id = content.taskID
+        title = content.title
+        dueAt = content.dueAt
+        isOverdue = true
+        isSnoozed = false
+        needsKeyScan = content.needsKeyScan
+    }
 }
 
 struct NagEntityQuery: EntityQuery, EntityStringQuery {
