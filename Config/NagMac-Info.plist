@@ -13,5 +13,9 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSLocationUsageDescription</key>
+	<string>Nag checks when this Mac arrives at or leaves the places you save, to start nags and locks there. It only works while Nag is running.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Nag checks when this Mac arrives at or leaves the places you save, to start nags and locks there. It only works while Nag is running.</string>
 </dict>
 </plist>

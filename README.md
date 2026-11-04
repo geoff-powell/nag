@@ -218,6 +218,16 @@ hash is stored. Nag can print a fresh QR code for you, or use any barcode you al
 (app selections and NFC tags don't carry across). Edits merge last-writer-wins, except that a
 completion is never lost to an older edit from the other device.
 
+**Places.** Optional. Save a place (Settings > Places) and a nag can start when you arrive at or leave
+it, once or every time, and a lock can switch on while you're there. Places, and whether you're at them,
+stay on the device; nags only carry the place's ID and name, so a nag made on the iPhone shows "Home
+(another device)" on the Mac until you link it to one of the Mac's places. Monitoring uses `CLMonitor`
+for up to 20 places, preferring ones locks and active nags use. iOS relaunches Nag in the background
+for an arrival; the Mac only notices while Nag is running. A waiting place nag stores a far-future
+start, so builds without place support see it as upcoming and never nag. The trigger itself is kept
+in the nag and in a separate iCloud key (`nag.placeTriggers.v1`) that older builds never write, so an
+older build saving the nag can't erase it. The arrival and lock rules live in `NagCore` (`Places.swift`).
+
 ## Adding nags from other apps
 
 Other apps can hand Nag a nag in two ways. Both record a **source** (shown on the nag) and, optionally,
@@ -313,5 +323,8 @@ yourself.
 - If Screen Time access isn't granted and quiet hours are on, Nag uses one-off notifications only, so
   it never nags at night without a way to stop.
 - Walk and key-scan requirements can only be met on the iPhone.
+- Place nags and locks need location access, and work with Nag closed only with "Always". They
+  resume after the first unlock following a restart, can be a few minutes late, and on the Mac only
+  work while Nag is running.
 - A nag you delete comes back if its source sends the same item again, for example on the next run
   of a Shortcuts automation.

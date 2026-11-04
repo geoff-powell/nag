@@ -10,6 +10,7 @@ struct TaskEditorView: View {
     @State private var task: NagTask
     @State private var startNow: Bool
     @State private var limitSnoozes: Bool
+    @State private var atPlace: Bool
     @State private var confirmDelete = false
 
     init(task: NagTask?) {
@@ -27,6 +28,7 @@ struct TaskEditorView: View {
         _task = State(initialValue: task)
         _startNow = State(initialValue: startNow)
         _limitSnoozes = State(initialValue: task.style.maxSnoozes != nil)
+        _atPlace = State(initialValue: task.placeTrigger != nil)
     }
 
     static let intervals = [1, 2, 5, 10, 15, 30, 60]
@@ -81,34 +83,24 @@ struct TaskEditorView: View {
                     }
                 }
 
-                Section {
-                    if !isCustom {
-                        Toggle("Start nagging now", isOn: $startNow.animation(Motion.quick))
-                        if !startNow {
-                            DatePicker("Starts", selection: $task.startAt)
+                if canUsePlaces {
+                    Section {
+                        Picker("Start", selection: placeModeBinding.animation(Motion.list)) {
+                            Text("At a time").tag(false)
+                            Text("At a place").tag(true)
                         }
-                    }
-                    Picker("Repeat", selection: $task.repeatRule.animation(Motion.list)) {
-                        ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag($0) }
-                    }
-                    .accessibilityIdentifier("repeat")
-                    if task.repeatRule == .everyNDays {
-                        Stepper("Every \(task.repeatEvery) days", value: $task.repeatEvery, in: 1...365)
-                    }
-                    if task.repeatRule == .monthly {
-                        Picker("On day", selection: $task.monthDay) {
-                            ForEach(1...31, id: \.self) { Text("\($0)").tag($0) }
-                        }
-                    }
-                } header: {
-                    Text("When")
-                } footer: {
-                    if task.repeatRule == .monthly {
-                        Text("Months without that day use their last day.")
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("startMode")
                     }
                 }
 
-                if isCustom {
+                if atPlace {
+                    placeSection
+                } else {
+                    timeSection
+                }
+
+                if isCustom && !atPlace {
                     timesSection
                 }
 
@@ -202,6 +194,100 @@ struct TaskEditorView: View {
         }
     }
 
+
+    private var timeSection: some View {
+        Section {
+            if !isCustom {
+                Toggle("Start nagging now", isOn: $startNow.animation(Motion.quick))
+                if !startNow {
+                    DatePicker("Starts", selection: $task.startAt)
+                }
+            }
+            Picker("Repeat", selection: $task.repeatRule.animation(Motion.list)) {
+                ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag($0) }
+            }
+            .accessibilityIdentifier("repeat")
+            if task.repeatRule == .everyNDays {
+                Stepper("Every \(task.repeatEvery) days", value: $task.repeatEvery, in: 1...365)
+            }
+            if task.repeatRule == .monthly {
+                Picker("On day", selection: $task.monthDay) {
+                    ForEach(1...31, id: \.self) { Text("\($0)").tag($0) }
+                }
+            }
+        } header: {
+            Text("When")
+        } footer: {
+            if task.repeatRule == .monthly {
+                Text("Months without that day use their last day.")
+            }
+        }
+    }
+
+    /// Places are optional: the choice only shows once a place is saved (or the nag already uses one).
+    private var canUsePlaces: Bool {
+        !model.state.places.isEmpty || task.placeTrigger != nil
+    }
+
+    private var placeModeBinding: Binding<Bool> {
+        Binding(
+            get: { atPlace },
+            set: { on in
+                atPlace = on
+                if on {
+                    task.placeTrigger = original?.placeTrigger
+                        ?? model.state.places.first.map { PlaceTrigger(place: $0.ref) }
+                } else {
+                    task.placeTrigger = nil
+                    if task.startAt >= PlaceTrigger.waitingThreshold {
+                        task.startAt = .now
+                        startNow = isNew
+                    }
+                }
+            }
+        )
+    }
+
+    private var placeSection: some View {
+        Section {
+            Picker("Place", selection: Binding(
+                get: { task.placeTrigger?.place.id },
+                set: { id in
+                    guard let id else { return }
+                    if let place = model.state.place(id) {
+                        task.placeTrigger?.place = place.ref
+                    }
+                }
+            )) {
+                if let ref = task.placeTrigger?.place, model.state.place(ref.id) == nil {
+                    Text(model.state.placeName(ref)).tag(UUID?.some(ref.id))
+                }
+                ForEach(model.state.places) { Text($0.name).tag(UUID?.some($0.id)) }
+            }
+            Picker("Nag me", selection: Binding(
+                get: { task.placeTrigger?.event ?? .arrive },
+                set: { task.placeTrigger?.event = $0 }
+            )) {
+                Text("When I arrive").tag(PlaceEvent.arrive)
+                Text("When I leave").tag(PlaceEvent.leave)
+            }
+            Toggle("Every time", isOn: Binding(
+                get: { task.placeTrigger?.repeats ?? true },
+                set: { task.placeTrigger?.repeats = $0 }
+            ))
+        } header: {
+            Text("Where")
+        } footer: {
+            if let ref = task.placeTrigger?.place, model.state.resolvedPlace(ref) == nil {
+                Text("This place was saved on another device, so it won't start here. Pick one of your places, or link it in Settings > Places.")
+            } else if task.placeTrigger?.repeats == true {
+                Text("Nags each time, until you mark it done. iPhone can be a few minutes late noticing.")
+            } else {
+                Text("Nags the next time, then it's done. iPhone can be a few minutes late noticing.")
+            }
+        }
+    }
+
     private var proofBinding: Binding<UUID?> {
         Binding(
             get: { task.proof.keyID },
@@ -256,7 +342,15 @@ struct TaskEditorView: View {
     }
 
     private func save() {
-        if startNow && isNew && !isCustom { task.startAt = .now }
+        if atPlace, task.placeTrigger != nil {
+            task.repeatRule = .never
+            // A new or changed trigger waits for the next visit. A nag that's already due keeps nagging.
+            if original?.placeTrigger != task.placeTrigger || original?.isAwaitingPlace != false {
+                task.waitForPlace()
+            }
+        } else if startNow && isNew && !isCustom {
+            task.startAt = .now
+        }
         task.alignStartToSchedule(previous: original, now: .now, calendar: model.calendar)
         if !limitSnoozes { task.style.maxSnoozes = nil }
         model.saveTask(task)
