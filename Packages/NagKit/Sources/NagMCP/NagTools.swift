@@ -314,6 +314,11 @@ public struct NagTools: Sendable {
         if let source = task.source { nag["source"] = .string(source) }
         if let externalID = task.externalID { nag["external_id"] = .string(externalID) }
         if let link = task.link { nag["link"] = .string(link.absoluteString) }
+        if let trigger = task.placeTrigger {
+            nag["starts_when"] = .string(trigger.event.label(trigger.place.name).lowercased())
+            nag["repeats_at_place"] = .bool(trigger.repeats)
+            if task.isAwaitingPlace { nag["starts_at"] = nil }
+        }
         return .object(nag)
     }
 

@@ -1,7 +1,9 @@
 @preconcurrency import FamilyControls
+import CoreLocation
 import Foundation
 import NagKit
 import Observation
+import UIKit
 @preconcurrency import UserNotifications
 
 /// The app's single source of truth. Views read `state` and call these methods; every change is written
@@ -21,6 +23,9 @@ final class AppModel {
     @ObservationIgnored private var cloudSync: CloudTaskSync?
     @ObservationIgnored private var quietHoursSync: QuietHoursSync?
     @ObservationIgnored private var syncTask: Task<Void, Never>?
+    @ObservationIgnored private(set) var placeMonitor: PlaceMonitor?
+    /// Location access, mirrored from `placeMonitor` so views update when it changes.
+    private(set) var locationStatus: CLAuthorizationStatus = .notDetermined
     /// UI tests: no iCloud, and no shields, DeviceActivity schedules or notifications. On a real
     /// iPhone those are shared with the user's real Nag, so a test run must not touch them.
     @ObservationIgnored private let isolated: Bool
@@ -57,7 +62,41 @@ final class AppModel {
         }
         quietHoursSync = quietHours
         quietHours.start()
+        startPlaceMonitor()
         sync()
+    }
+
+    /// Started during launch, because iOS relaunches Nag in the background to deliver an arrival or
+    /// departure, and only a monitor opened then receives it.
+    private func startPlaceMonitor() {
+        let monitor = PlaceMonitor(store: store) { [weak self] started in
+            self?.placeEventArrived(started: started)
+        }
+        monitor.onAuthorizationChange = { [weak self] in
+            guard let self, let monitor = self.placeMonitor else { return }
+            self.locationStatus = monitor.authorization
+            monitor.refresh(state: self.state)
+        }
+        placeMonitor = monitor
+        locationStatus = monitor.authorization
+        monitor.start()
+    }
+
+    /// An arrival or departure was recorded. Locks, shields and notifications catch up through the
+    /// usual sync, and nags it started nag straight away.
+    private func placeEventArrived(started: [UUID]) {
+        let background = UIApplication.shared.beginBackgroundTask(withName: "nag.place")
+        reload()
+        cloudSync?.reconcile()
+        sync()
+        Task {
+            await waitForSync()
+            for id in started {
+                guard let task = state.task(id), let trigger = task.placeTrigger else { continue }
+                await NotificationSync.nagNow(task, placeName: state.placeName(trigger.place))
+            }
+            if background != .invalid { UIApplication.shared.endBackgroundTask(background) }
+        }
     }
 
     func becameActive() {
@@ -89,6 +128,8 @@ final class AppModel {
     /// Runs NagEngine after any earlier sync finishes, so syncs never overlap.
     func sync() {
         guard !isolated else { return }
+        // Cheap when nothing changed: only places that are new, moved or no longer needed are touched.
+        placeMonitor?.refresh(state: state)
         let previous = syncTask
         let store = store
         syncTask = Task {
@@ -201,7 +242,7 @@ final class AppModel {
     }
 
     func clearFinished() {
-        let finished = state.tasks.filter { $0.isFinished && canDeleteTask($0.id) }.map(\.id)
+        let finished = state.tasks.filter { $0.isClearable && canDeleteTask($0.id) }.map(\.id)
         guard !finished.isEmpty else { return }
         update { state in
             for id in finished { state.deleteTask(id, at: .now) }
@@ -288,6 +329,7 @@ final class AppModel {
                 updated.status = state.profiles[index].status
                 updated.lastScheduledLockAt = state.profiles[index].lastScheduledLockAt
                 updated.autoLockPausedUntil = state.profiles[index].autoLockPausedUntil
+                updated.lastPlaceLockAt = state.profiles[index].lastPlaceLockAt
                 state.profiles[index] = updated
             } else {
                 state.profiles.append(profile)
@@ -367,6 +409,30 @@ final class AppModel {
     func deleteKey(_ id: UUID) {
         guard canDeleteKey(id) else { return }
         update { $0.keys.removeAll { $0.id == id } }
+    }
+
+    // MARK: - Places
+
+    func savePlace(_ place: SavedPlace) {
+        update { $0.savePlace(place) }
+    }
+
+    func deletePlace(_ id: UUID) {
+        update { $0.deletePlace(id) }
+    }
+
+    func linkPlace(_ ref: PlaceRef, to placeID: UUID?) {
+        update { $0.linkPlace(ref, to: placeID) }
+    }
+
+    /// Asks for location access: "While Using" first, then "Always" once that's granted.
+    func requestLocation() {
+        guard let placeMonitor else { return }
+        if locationStatus == .notDetermined {
+            placeMonitor.requestWhenInUse()
+        } else if locationStatus == .authorizedWhenInUse {
+            placeMonitor.requestAlways()
+        }
     }
 
     // MARK: - Settings

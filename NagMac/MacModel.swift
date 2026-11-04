@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 import NagKit
 import Observation
@@ -46,6 +47,9 @@ final class MacModel {
     @ObservationIgnored private var tickTask: Task<Void, Never>?
     @ObservationIgnored private var notificationTask: Task<Void, Never>?
     @ObservationIgnored private var lastNotificationSync = Date.distantPast
+    @ObservationIgnored private(set) var placeMonitor: PlaceMonitor?
+    /// Location access, mirrored from `placeMonitor` so views update when it changes.
+    private(set) var locationStatus: CLAuthorizationStatus = .notDetermined
 
     static let tickInterval: Duration = .seconds(15)
 
@@ -74,6 +78,7 @@ final class MacModel {
         }
         quietHoursSync = quietHours
         quietHours.start()
+        startPlaceMonitor()
 
         tickTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -82,6 +87,35 @@ final class MacModel {
             }
         }
         Task { await refreshPermissions() }
+    }
+
+    /// The Mac only watches places while Nag is running, which it usually is, in the menu bar.
+    private func startPlaceMonitor() {
+        let monitor = PlaceMonitor(store: store) { [weak self] started in
+            self?.placeEventArrived(started: started)
+        }
+        monitor.onAuthorizationChange = { [weak self] in
+            guard let self, let monitor = self.placeMonitor else { return }
+            self.locationStatus = monitor.authorization
+            monitor.refresh(state: self.state)
+        }
+        placeMonitor = monitor
+        locationStatus = monitor.authorization
+        monitor.start()
+    }
+
+    private func placeEventArrived(started: [UUID]) {
+        reload()
+        cloudSync?.reconcile()
+        tick()
+        syncNotifications()
+        Task {
+            await waitForNotificationSync()
+            for id in started {
+                guard let task = state.task(id), let trigger = task.placeTrigger else { continue }
+                await NotificationSync.nagNow(task, placeName: state.placeName(trigger.place))
+            }
+        }
     }
 
     /// Brings locks up to date, then re-enforces. Notifications are re-planned at least once a minute
@@ -142,6 +176,7 @@ final class MacModel {
     /// Re-plans notifications, after any earlier sync finishes so they never overlap.
     func syncNotifications() {
         lastNotificationSync = .now
+        placeMonitor?.refresh(state: state)
         let previous = notificationTask
         let store = store
         let calendar = calendar
@@ -313,7 +348,7 @@ final class MacModel {
     }
 
     func clearFinished() {
-        let finished = state.tasks.filter { $0.isFinished && canDeleteTask($0.id) }.map(\.id)
+        let finished = state.tasks.filter { $0.isClearable && canDeleteTask($0.id) }.map(\.id)
         guard !finished.isEmpty else { return }
         update { state in
             for id in finished { state.deleteTask(id, at: .now) }
@@ -349,6 +384,7 @@ final class MacModel {
                 updated.status = state.profiles[index].status
                 updated.lastScheduledLockAt = state.profiles[index].lastScheduledLockAt
                 updated.autoLockPausedUntil = state.profiles[index].autoLockPausedUntil
+                updated.lastPlaceLockAt = state.profiles[index].lastPlaceLockAt
                 state.profiles[index] = updated
             } else {
                 state.profiles.append(profile)
@@ -404,6 +440,24 @@ final class MacModel {
             guard let index = state.profiles.firstIndex(where: { $0.id == id }) else { return }
             change(&state.profiles[index])
         }
+    }
+
+    // MARK: - Places
+
+    func savePlace(_ place: SavedPlace) {
+        update { $0.savePlace(place) }
+    }
+
+    func deletePlace(_ id: UUID) {
+        update { $0.deletePlace(id) }
+    }
+
+    func linkPlace(_ ref: PlaceRef, to placeID: UUID?) {
+        update { $0.linkPlace(ref, to: placeID) }
+    }
+
+    func requestLocation() {
+        placeMonitor?.requestWhenInUse()
     }
 
     // MARK: - Settings

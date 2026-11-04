@@ -35,6 +35,11 @@ struct OnboardingView: View {
                         title: "Physical keys",
                         detail: "Pair any NFC sticker or QR code and put it where the task happens."
                     )
+                    FeatureRow(
+                        symbol: "mappin.and.ellipse",
+                        title: "Places, if you want them",
+                        detail: "Start a nag when you get home, or lock apps at the office. Add places in Settings; Nag asks for your location then, and only checks when you arrive or leave."
+                    )
 
                     VStack(spacing: 12) {
                         PermissionButton(

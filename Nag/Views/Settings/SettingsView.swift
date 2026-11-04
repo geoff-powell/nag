@@ -70,6 +70,9 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink("Unlock keys") { KeysView() }
+                    NavigationLink("Places") { PlacesView() }
+                } footer: {
+                    Text("Places are optional. Save one to start nags or locks when you arrive or leave.")
                 }
 
                 Section {
