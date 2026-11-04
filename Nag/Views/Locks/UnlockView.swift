@@ -8,11 +8,13 @@ struct UnlockView: View {
     @Environment(AppModel.self) private var model
     @Environment(Router.self) private var router
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var steps: Int?
     @State private var scanning: ScanTarget?
     @State private var typing: TypingTarget?
     @State private var confirmEmergency = false
     @State private var unlockedMessage: String?
+    @State private var celebration: Celebration?
 
     var body: some View {
         NavigationStack {
@@ -84,8 +86,12 @@ struct UnlockView: View {
 
             if let unlockedMessage {
                 Section {
-                    Label(unlockedMessage, systemImage: "checkmark.seal.fill")
-                        .foregroundStyle(.green)
+                    Label {
+                        Text(unlockedMessage)
+                    } icon: {
+                        CelebrationMark(celebration, symbol: "checkmark.seal.fill")
+                    }
+                    .foregroundStyle(.green)
                 }
             }
 
@@ -115,7 +121,7 @@ struct UnlockView: View {
                 Section {
                     Button {
                         if model.unlock(profileID, steps: steps) {
-                            UINotificationFeedbackGenerator().notificationOccurred(.success)
+                            celebration = model.celebrate(reduceMotion: reduceMotion)
                             unlockedMessage = model.profile(profileID).map(NagEngine.unlockedMessage) ?? "Unlocked."
                         }
                     } label: {

@@ -8,6 +8,7 @@ struct NagRow: View {
     let onComplete: () -> Void
 
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The check was just tapped: show it filled while the completion lands.
     @State private var checking = false
     @State private var checkBounces = 0
@@ -23,7 +24,6 @@ struct NagRow: View {
             }
             .buttonStyle(.plain)
             .disabled(checking || !task.canComplete(at: now, calendar: model.calendar))
-            .sensoryFeedback(.success, trigger: checkBounces)
             .accessibilityLabel(needsScan ? "Scan to finish" : "Mark done")
             .accessibilityIdentifier("complete.\(task.title)")
             .accessibilityValue(checkState)
@@ -62,6 +62,7 @@ struct NagRow: View {
     }
 
     /// Fills the check in place first, then completes, so the row only moves once the tap has landed.
+    /// The celebration's haptic fires on the tap; its animation plays in the undo toast.
     private func tapCheck() {
         guard !needsScan else {
             onComplete()
@@ -69,6 +70,7 @@ struct NagRow: View {
         }
         withAnimation(Motion.quick) { checking = true }
         checkBounces += 1
+        model.celebrate(reduceMotion: reduceMotion)
         Task { @MainActor in
             try? await Task.sleep(for: Motion.checkBeat)
             onComplete()

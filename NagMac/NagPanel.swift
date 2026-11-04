@@ -12,6 +12,10 @@ final class NagPanelController {
     private let model: MacModel
     private let panel = FloatingPanel(nonactivating: true)
     private var collapsedAt: Date?
+    /// The nag last marked done from the panel, and the reward its card plays.
+    private var celebration: (taskID: UUID, celebration: Celebration)?
+    private var celebrationCount = 0
+    private let celebrationSeed = UInt64.random(in: .min ... .max)
 
     init(model: MacModel) {
         self.model = model
@@ -50,7 +54,8 @@ final class NagPanelController {
             now: now,
             collapsed: collapsedAt != nil,
             needsPhoneScan: model.needsPhoneScan,
-            onDone: { [weak self] id in self?.model.complete(id) },
+            celebration: celebration,
+            onDone: { [weak self] id in self?.complete(id) },
             onUndo: { [weak self] id in self?.model.undo(id) },
             onStart: { [weak self] id in self?.model.start(id) },
             onSnooze: { [weak self] id, minutes in self?.model.snooze(id, minutes: minutes) },
@@ -60,6 +65,15 @@ final class NagPanelController {
         panel.setContent(view, width: collapsedAt == nil ? 340 : 170)
         position()
         if !panel.isVisible { panel.orderFrontRegardless() }
+    }
+
+    /// Marks a nag done with a small flourish on its card as it turns into the undo card. The Mac has no
+    /// haptics to play, so only the animation varies.
+    private func complete(_ id: UUID) {
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        celebration = (id, Celebration.make(index: celebrationCount, seed: celebrationSeed, haptics: false, reduceMotion: reduceMotion))
+        celebrationCount += 1
+        model.complete(id)
     }
 
     private func toggleCollapsed() {
@@ -81,6 +95,7 @@ private struct NagPanelView: View {
     let now: Date
     let collapsed: Bool
     let needsPhoneScan: (NagTask) -> Bool
+    let celebration: (taskID: UUID, celebration: Celebration)?
     let onDone: (UUID) -> Void
     let onUndo: (UUID) -> Void
     let onStart: (UUID) -> Void
@@ -122,9 +137,15 @@ private struct NagPanelView: View {
 
             ForEach(tasks.prefix(5)) { task in
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(task.title)
-                        .font(.body.weight(.semibold))
-                        .lineLimit(2)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        if task.canUndoCompletion(at: now) {
+                            CelebrationMark(celebration?.taskID == task.id ? celebration?.celebration : nil)
+                                .foregroundStyle(.green)
+                        }
+                        Text(task.title)
+                            .font(.body.weight(.semibold))
+                            .lineLimit(2)
+                    }
                     Text(subtitle(for: task))
                         .font(.caption)
                         .foregroundStyle(.secondary)
