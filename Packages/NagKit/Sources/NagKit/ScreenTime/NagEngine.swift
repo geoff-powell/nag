@@ -82,6 +82,9 @@ public enum NagEngine {
             tasks: state.tasks,
             quietHours: state.settings.quietHours,
             tone: state.settings.nagTone,
+            handoffUntil: state.settings.deviceHandoff
+                ? DeviceHandoff.handoffUntil(heartbeats: state.devices, now: now)
+                : nil,
             now: now
         )
 

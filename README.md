@@ -218,6 +218,13 @@ hash is stored. Nag can print a fresh QR code for you, or use any barcode you al
 (app selections and NFC tags don't carry across). Edits merge last-writer-wins, except that a
 completion is never lost to an older edit from the other device.
 
+**Mac takes over at the desk.** While the Mac is in use (unlocked, awake, input in the last 5 minutes),
+it writes a heartbeat to iCloud saying it's active for the next 15 minutes, refreshed every 5. The
+iPhone plans sparse reminders (at most every 30 minutes) up to that moment and its usual escalation
+after it, so it's back to full nagging even if it never hears the Mac go idle. No heartbeat, an
+expired one, or a clock that looks wrong all mean full nagging. Either device can switch this off in
+Settings. The rules live in NagCore (`DeviceHandoff`, `NagPlanner`).
+
 ## Adding nags from other apps
 
 Other apps can hand Nag a nag in two ways. Both record a **source** (shown on the nag) and, optionally,
