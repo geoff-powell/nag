@@ -184,7 +184,7 @@ struct MacTaskEditor: View {
     private let original: NagTask?
     @State private var task: NagTask
     @State private var startNow: Bool
-    @State private var limitSnoozes: Bool
+    @State private var showMore = false
 
     init(task: NagTask?) {
         self.init(task: task ?? NagTask(title: ""), original: task, startNow: task == nil)
@@ -200,34 +200,14 @@ struct MacTaskEditor: View {
         self.original = original
         _task = State(initialValue: task)
         _startNow = State(initialValue: startNow)
-        _limitSnoozes = State(initialValue: task.style.maxSnoozes != nil)
     }
 
     private var isCustom: Bool { task.repeatRule == .custom }
+    private var selectedPreset: NagPreset? { NagPreset.matching(task, keys: model.state.keys) }
 
     var body: some View {
         VStack(spacing: 0) {
             Form {
-                Section("Start from") {
-                    HStack(alignment: .top) {
-                        ForEach(NagPreset.all) { preset in
-                            VStack(alignment: .leading, spacing: 6) {
-                                Button {
-                                    preset.apply(to: &task, keys: model.state.keys, now: .now, calendar: .current)
-                                    limitSnoozes = task.style.maxSnoozes != nil
-                                } label: {
-                                    Label(preset.name, systemImage: preset.symbol)
-                                }
-                                .buttonStyle(.bordered)
-                                Text(preset.summary)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                }
                 Section {
                     TextField("What needs doing?", text: $task.title)
                     TextField("Notes, or the first tiny step", text: $task.notes, axis: .vertical)
@@ -241,6 +221,24 @@ struct MacTaskEditor: View {
                         if let link = task.link {
                             Link("Open original", destination: link)
                         }
+                    }
+                }
+                Section {
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(NagPreset.all) { preset in
+                            MacPresetCard(preset: preset, isSelected: preset == selectedPreset) {
+                                preset.apply(to: &task, keys: model.state.keys, now: .now, calendar: model.calendar)
+                            }
+                        }
+                    }
+                    // Cards fill the row's height, so they line up whatever their summary length.
+                    .fixedSize(horizontal: false, vertical: true)
+                } header: {
+                    Text("Start from")
+                } footer: {
+                    if selectedPreset == nil {
+                        Text("Custom settings. Click a preset to start over.")
+                            .foregroundStyle(.secondary)
                     }
                 }
                 Section("When") {
@@ -270,36 +268,46 @@ struct MacTaskEditor: View {
                 }
                 Section {
                     Picker("Nag every", selection: $task.style.intervalMinutes) {
-                        ForEach([1, 2, 5, 10, 15, 30, 60], id: \.self) { Text(NagFormat.minutes($0)).tag($0) }
+                        ForEach(NagStyleChoices.minutes(NagStyleChoices.intervals, including: task.style.intervalMinutes), id: \.self) {
+                            Text(NagFormat.minutes($0)).tag($0)
+                        }
                     }
                     Picker("Escalation", selection: $task.style.escalation) {
                         ForEach(Escalation.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
-                    Picker("Tone", selection: $task.style.tone) {
-                        Text("Use the default").tag(NagTone?.none)
-                        ForEach(NagTone.allCases, id: \.self) { Text($0.label).tag(NagTone?.some($0)) }
+                    Picker("Snoozes allowed", selection: $task.style.maxSnoozes) {
+                        ForEach(NagStyleChoices.snoozeLimits(including: task.style.maxSnoozes), id: \.self) {
+                            Text(NagStyleChoices.snoozeLimitLabel($0)).tag($0)
+                        }
                     }
-                    Picker("Working time", selection: $task.style.workMinutes) {
-                        ForEach([10, 15, 25, 30, 45, 60, 90], id: \.self) { Text(NagFormat.minutes($0)).tag($0) }
-                    }
-                    Toggle("Break through Focus", isOn: $task.style.breakThroughFocus)
                 } header: {
                     Text("Nagging")
                 } footer: {
-                    Text("After you tap Started, Nag goes quiet for this long, then checks in.")
+                    Text("Snoozed nags still count as due for locks.")
                         .foregroundStyle(.secondary)
                 }
-                Section("Snooze") {
-                    Picker("Snooze for", selection: $task.style.snoozeMinutes) {
-                        ForEach([5, 10, 15, 30, 60], id: \.self) { Text(NagFormat.minutes($0)).tag($0) }
+                Section {
+                    DisclosureGroup("More options", isExpanded: $showMore) {
+                        Picker("Snooze for", selection: $task.style.snoozeMinutes) {
+                            ForEach(NagStyleChoices.minutes(NagStyleChoices.snoozeLengths, including: task.style.snoozeMinutes), id: \.self) {
+                                Text(NagFormat.minutes($0)).tag($0)
+                            }
+                        }
+                        Picker("Tone", selection: $task.style.tone) {
+                            Text("Use the default").tag(NagTone?.none)
+                            ForEach(NagTone.allCases, id: \.self) { Text($0.label).tag(NagTone?.some($0)) }
+                        }
+                        Picker("Working time", selection: $task.style.workMinutes) {
+                            ForEach(NagStyleChoices.minutes(NagStyleChoices.workLengths, including: task.style.workMinutes), id: \.self) {
+                                Text(NagFormat.minutes($0)).tag($0)
+                            }
+                        }
+                        Toggle("Break through Focus", isOn: $task.style.breakThroughFocus)
                     }
-                    Toggle("Limit snoozes", isOn: $limitSnoozes)
-                    if limitSnoozes {
-                        Stepper(
-                            "\(task.style.maxSnoozes ?? 3) per occurrence",
-                            value: Binding(get: { task.style.maxSnoozes ?? 3 }, set: { task.style.maxSnoozes = $0 }),
-                            in: 0...10
-                        )
+                } footer: {
+                    if showMore {
+                        Text("Working time is how long Nag stays quiet after you click Started.")
+                            .foregroundStyle(.secondary)
                     }
                 }
                 if model.needsPhoneScan(task) {
@@ -324,7 +332,6 @@ struct MacTaskEditor: View {
                 Button("Save") {
                     if isNew && startNow && !isCustom { task.startAt = .now }
                     task.alignStartToSchedule(previous: original, now: .now, calendar: model.calendar)
-                    if !limitSnoozes { task.style.maxSnoozes = nil }
                     model.saveTask(task)
                     dismiss()
                 }
@@ -388,5 +395,46 @@ struct MacTaskEditor: View {
             },
             set: { minute.wrappedValue = minuteOfDay($0) }
         )
+    }
+}
+
+/// A preset as a clickable card that shows when the nag's settings match it.
+private struct MacPresetCard: View {
+    let preset: NagPreset
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Image(systemName: preset.symbol)
+                        .foregroundStyle(.tint)
+                    Spacer()
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
+                }
+                .accessibilityHidden(true)
+                Text(preset.name)
+                    .font(.headline)
+                Text(preset.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear), lineWidth: 2)
+            }
+            .contentShape(.rect(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .help(preset.summary)
+        .accessibilityLabel(preset.name)
+        .accessibilityValue(preset.summary)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
