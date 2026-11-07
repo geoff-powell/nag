@@ -2,9 +2,9 @@ name: Windows
 on:
   push:
     branches: [main]
-    paths: ['NagWindows/**', '.github/workflows/windows.yml']
+    paths: ['NagWindows/**', 'Fixtures/**', '.github/workflows/windows.yml']
   pull_request:
-    paths: ['NagWindows/**', '.github/workflows/windows.yml']
+    paths: ['NagWindows/**', 'Fixtures/**', '.github/workflows/windows.yml']
   workflow_dispatch:
 
 concurrency:

@@ -5,7 +5,7 @@ Local environment: Windows x64, .NET SDK 10.0.403 installed under a disposable t
 Commands (using the temporary SDK's `dotnet.exe`):
 
 - `dotnet build NagWindows/Nag.Windows -c Release`: passes, zero warnings/errors.
-- `dotnet run --project NagWindows/Nag.Core.Tests -c Release`: 15 checks pass. Covers recurrence, skipped occurrences, snooze allowance, completion reset, quiet hours, escalation, reminder wording, lock conditions, emergency/timer expiry, atomic persistence, backup, invalid mutations and corrupt-store refusal.
+- `dotnet run --project NagWindows/Nag.Core.Tests -c Release`: 20 checks pass. Covers the shared conformance fixtures in `Fixtures/conformance` (escalation and snooze, with recorded differences from Swift), recurrence, skipped occurrences, snooze allowance, completion reset, quiet hours, escalation, reminder wording, lock conditions, emergency/timer expiry, atomic persistence, backup, invalid mutations and corrupt-store refusal.
 - `dotnet run --project NagWindows/Nag.Windows.Tests -c Release`: passes. Uses disposable stores and actual form controls to verify completion, snooze, filtering, reopening and editor creation, checking persisted state. Produces control-rendered images under `build/windows-evidence`.
 - `./NagWindows/build.ps1 -Dotnet <temporary-sdk>/dotnet.exe`: produces the self-contained x64 executable and ZIP.
 - The packaged `build/Nag-win-x64/Nag.exe --demo` launched with an isolated temporary store and without `DOTNET_ROOT` pointing at the temporary SDK. The smoke-test process was stopped afterward.

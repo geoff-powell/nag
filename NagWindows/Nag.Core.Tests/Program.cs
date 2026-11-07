@@ -131,4 +131,11 @@ try
     });
 }
 finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+Check("shared conformance fixtures (Fixtures/conformance)", () =>
+{
+    var result = Nag.Conformance.ConformanceRunner.Run(new NagCoreEvaluator());
+    foreach (string note in result.Notes) Console.WriteLine("  " + note);
+    if (result.Failures.Count > 0) throw new Exception(string.Join(Environment.NewLine, result.Failures));
+    Console.WriteLine($"  {result.Passed} cases matched, {result.Skipped} skipped");
+});
 Console.WriteLine($"{passed} checks passed.");
