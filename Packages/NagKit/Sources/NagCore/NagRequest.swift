@@ -22,6 +22,8 @@ public struct NagRequest: Hashable, Sendable {
     public var repeatEvery: Int?
     public var monthDay: Int?
     public var times: [NagTime]?
+    /// A starting point for the nag's style and proof. The request's own style fields override it.
+    public var preset: NagPreset?
     public var intervalMinutes: Int?
     public var escalation: Escalation?
     public var snoozeMinutes: Int?
@@ -42,6 +44,7 @@ public struct NagRequest: Hashable, Sendable {
         repeatEvery: Int? = nil,
         monthDay: Int? = nil,
         times: [NagTime]? = nil,
+        preset: NagPreset? = nil,
         intervalMinutes: Int? = nil,
         escalation: Escalation? = nil,
         snoozeMinutes: Int? = nil,
@@ -58,6 +61,7 @@ public struct NagRequest: Hashable, Sendable {
         self.repeatEvery = repeatEvery
         self.monthDay = monthDay
         self.times = times
+        self.preset = preset
         self.intervalMinutes = intervalMinutes
         self.escalation = escalation
         self.snoozeMinutes = snoozeMinutes
@@ -75,6 +79,8 @@ public enum NagRequestError: Error, Hashable, Sendable {
     case invalidSchedule
     case invalidValue(parameter: String, value: String)
     case unsupportedURL
+    /// A repeat Nag has no rule for, such as yearly or every other month.
+    case unsupportedRepeat
 }
 
 extension NagRequestError: LocalizedError {
@@ -84,6 +90,7 @@ extension NagRequestError: LocalizedError {
         case .invalidSchedule: "Custom times need at least one time, and at least one day for each."
         case .invalidValue(let parameter, let value): "“\(value)” isn't a valid \(parameter)."
         case .unsupportedURL: "Nag doesn't recognize this link."
+        case .unsupportedRepeat: "Nag can repeat daily, on weekdays, on certain days each week, every few days or monthly."
         }
     }
 }
@@ -128,6 +135,12 @@ extension NagState {
         if let rule = request.repeatRule ?? (request.times == nil ? nil : .custom) { task.repeatRule = rule }
         if let every = request.repeatEvery { task.repeatEvery = every }
         if let day = request.monthDay { task.monthDay = day }
+        if let preset = request.preset {
+            // `save` stamps `updatedAt` when something changed, so the same preset again changes nothing.
+            let updatedAt = task.updatedAt
+            preset.apply(to: &task, keys: keys, now: now, calendar: calendar)
+            task.updatedAt = updatedAt
+        }
         if let minutes = request.intervalMinutes { task.style.intervalMinutes = minutes }
         if let escalation = request.escalation { task.style.escalation = escalation }
         if let minutes = request.snoozeMinutes { task.style.snoozeMinutes = minutes }

@@ -122,21 +122,12 @@ final class AppModel {
 
     /// Adds a nag from Shortcuts or Siri, or updates the one made earlier from the same source item.
     @discardableResult
-    func apply(_ request: NagRequest, preset: NagPreset? = nil) throws(NagRequestError) -> NagDraft {
+    func apply(_ request: NagRequest) throws(NagRequestError) -> NagDraft {
         var result: Result<NagDraft, NagRequestError> = .failure(.missingTitle)
         let calendar = calendar
         update { state in
             do throws(NagRequestError) {
-                var draft = try state.apply(request, now: .now, calendar: calendar)
-                if let preset, let index = state.tasks.firstIndex(where: { $0.id == draft.task.id }) {
-                    preset.apply(to: &state.tasks[index], keys: state.keys, now: .now, calendar: calendar)
-                    // Explicit parameters override the preset's starting values.
-                    if let intervalMinutes = request.intervalMinutes {
-                        state.tasks[index].style.intervalMinutes = intervalMinutes
-                    }
-                    draft.task = state.tasks[index]
-                }
-                result = .success(draft)
+                result = .success(try state.apply(request, now: .now, calendar: calendar))
             } catch {
                 result = .failure(error)
             }
