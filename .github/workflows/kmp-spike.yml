@@ -1,0 +1,152 @@
+name: KMP spike
+
+# Disposable prototype for #41. Builds the shared Kotlin rules and runs them from real Swift and
+# .NET consumers against Fixtures/conformance.
+on:
+  push:
+    branches: [main, 'gpowel46/41-*']
+    paths: ['kmp/**', 'Fixtures/**', 'Packages/NagKit/Sources/NagCore/**', 'NagWindows/Nag.Core.Tests/ConformanceRunner.cs', '.github/workflows/kmp-spike.yml']
+  pull_request:
+    paths: ['kmp/**', 'Fixtures/**', 'Packages/NagKit/Sources/NagCore/**', 'NagWindows/Nag.Core.Tests/ConformanceRunner.cs', '.github/workflows/kmp-spike.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: kmp-spike-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+  GRADLE_OPTS: -Dorg.gradle.console=plain
+
+jobs:
+  apple:
+    name: macOS - tests, XCFramework, Swift and .NET consumers
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+      - uses: actions/cache@v6
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('kmp/gradle/libs.versions.toml') }}
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Kotlin tests (JVM, macOS, iOS simulator)
+        run: ./kmp/gradlew -p kmp :nag-rules:allTests
+      - name: Build XCFramework and shared libraries (mingwX64 cross-compiled)
+        run: |
+          start=$(date +%s)
+          ./kmp/gradlew -p kmp :nag-rules:assembleNagRulesReleaseXCFramework :nag-rules:linkReleaseSharedMacosArm64 :nag-rules:linkReleaseSharedMingwX64
+          echo "Release binaries built in $(( $(date +%s) - start ))s"
+          cd kmp/nag-rules/build
+          ls -l bin/macosArm64/releaseShared/libnagrules.dylib bin/mingwX64/releaseShared/nagrules.dll
+          du -sh XCFrameworks/release/NagRules.xcframework
+      - name: Swift consumer (typed API, fixtures and differential check against NagCore)
+        run: ./kmp/consumers/swift/run.sh
+      - name: .NET consumer (C ABI via libnagrules.dylib)
+        run: dotnet run --project kmp/consumers/dotnet -c Release
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nagrules-mingwX64-cross
+          path: |
+            kmp/nag-rules/build/bin/mingwX64/releaseShared/nagrules.dll
+            kmp/nag-rules/build/bin/mingwX64/releaseShared/nagrules_api.h
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64 - native build and .NET consumer
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+      - uses: actions/cache@v6
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('kmp/gradle/libs.versions.toml') }}
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Kotlin tests on Windows (JVM, mingwX64)
+        run: ./kmp/gradlew.bat -p kmp :nag-rules:jvmTest :nag-rules:mingwX64Test
+      - name: Build nagrules.dll on a Windows host
+        run: |
+          $timer = [Diagnostics.Stopwatch]::StartNew()
+          ./kmp/gradlew.bat -p kmp :nag-rules:linkReleaseSharedMingwX64
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "Release DLL built in $([int]$timer.Elapsed.TotalSeconds)s"
+          Get-Item kmp/nag-rules/build/bin/mingwX64/releaseShared/nagrules.dll | Select-Object Name, Length
+      - name: .NET consumer (C ABI via nagrules.dll)
+        run: dotnet run --project kmp/consumers/dotnet -c Release
+
+  windows-cross:
+    name: Windows x64 - DLL cross-compiled on macOS
+    needs: apple
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/download-artifact@v8
+        with:
+          name: nagrules-mingwX64-cross
+          path: cross
+      - name: .NET consumer against the macOS-built DLL
+        env:
+          NAGRULES_LIB: ${{ github.workspace }}\cross\nagrules.dll
+        run: dotnet run --project kmp/consumers/dotnet -c Release
+
+  windows-arm64:
+    name: Windows ARM64 - x64 DLL under emulation
+    needs: apple
+    runs-on: windows-11-arm
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/download-artifact@v8
+        with:
+          name: nagrules-mingwX64-cross
+          path: cross
+      - name: Native ARM64 process cannot load the x64 DLL (expected)
+        env:
+          NAGRULES_LIB: ${{ github.workspace }}\cross\nagrules.dll
+        run: |
+          dotnet run --project kmp/consumers/dotnet -c Release
+          if ($LASTEXITCODE -eq 0) { throw "An ARM64 process loaded an x64 DLL; revisit the findings" }
+          "Confirmed: an ARM64 process cannot load nagrules.dll (x64)."
+          $global:LASTEXITCODE = 0
+      - name: x64 consumer under emulation loads the x64 DLL
+        env:
+          NAGRULES_LIB: ${{ github.workspace }}\cross\nagrules.dll
+        run: |
+          dotnet publish kmp/consumers/dotnet -c Release -r win-x64 --self-contained -o publish-x64
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./publish-x64/NagRulesConsumer.exe
