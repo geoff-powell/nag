@@ -29,6 +29,8 @@ final class MacModel {
     private(set) var state: NagState
     private(set) var notificationStatus: UNAuthorizationStatus = .notDetermined
     private(set) var launchAtLogin = SMAppService.mainApp.status == .enabled
+    /// When the last tick ran. Views that only need to refresh at tick rate, like the menu bar label, read it.
+    private(set) var lastTick = Date.now
     var section: Section = .nags
     var unlockRequest: PresentedID?
     /// A nag from a link, shown in the editor.
@@ -93,7 +95,8 @@ final class MacModel {
             return state
         }
         let changed = updated != state
-        state = updated
+        if changed { state = updated }
+        lastTick = now
         onChange?()
 
         for profile in autoUnlocked {
