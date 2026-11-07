@@ -33,7 +33,7 @@ Check("snooze is outstanding, silent, and limited", () =>
 Check("completion resets per-occurrence state", () =>
 {
     var n = new Reminder { Due = friday, Repeat = Repeat.Daily }; n.Snooze(friday); n.Complete(friday);
-    Equal(0, n.SnoozeCount); Equal<DateTime?>(null, n.SnoozedUntil); Equal<DateTime?>(null, n.LastNotified);
+    Equal(0, n.SnoozeCount); Equal<DateTimeOffset?>(null, n.SnoozedUntil); Equal<DateTimeOffset?>(null, n.LastNotified);
 });
 Check("quiet hours span midnight and exclude ending hour", () =>
 {
@@ -74,6 +74,28 @@ Check("timed locks stop at deadline", () =>
 {
     var l = new AppLock { Enabled = true, WhileDue = false, Until = friday.AddMinutes(30) };
     Equal(true, l.Active(friday, [])); Equal(false, l.Active(friday.AddMinutes(30), []));
+});
+// Explicit offsets (US Eastern) keep these independent of the machine's time zone.
+var longAgo = new DateTime(2000, 1, 1);
+var beforeFallBack = new DateTimeOffset(2026, 11, 1, 1, 58, 0, TimeSpan.FromHours(-4));
+// 15 minutes later, though the wall clock reads 45 minutes earlier.
+var afterFallBack = new DateTimeOffset(2026, 11, 1, 1, 13, 0, TimeSpan.FromHours(-5));
+Check("emergency unlock lasts five minutes across a fall-back change", () =>
+{
+    var n = new Reminder { Due = longAgo }; var l = new AppLock { Enabled = true, EmergencyUntil = beforeFallBack.AddMinutes(5) };
+    Equal(false, l.Active(beforeFallBack.AddMinutes(4), [n])); Equal(true, l.Active(afterFallBack, [n]));
+});
+Check("notification cadence continues across a fall-back change", () =>
+{
+    var n = new Reminder { Due = longAgo, Escalation = Escalation.Steady, LastNotified = beforeFallBack };
+    Equal(false, n.ShouldNotify(beforeFallBack.AddMinutes(14), new())); Equal(true, n.ShouldNotify(afterFallBack, new()));
+});
+Check("snooze is not cut short by a spring-forward change", () =>
+{
+    var beforeSpringForward = new DateTimeOffset(2026, 3, 8, 1, 55, 0, TimeSpan.FromHours(-5));
+    var afterSpringForward = new DateTimeOffset(2026, 3, 8, 3, 0, 0, TimeSpan.FromHours(-4)); // 5 minutes later
+    var n = new Reminder { Due = longAgo, SnoozeMinutes = 10 }; n.Snooze(beforeSpringForward);
+    Equal(true, n.Snoozed(afterSpringForward)); Equal(false, n.Snoozed(beforeSpringForward.AddMinutes(10)));
 });
 string directory = Path.Combine(Path.GetTempPath(), "nag-tests-" + Guid.NewGuid());
 try
@@ -117,8 +139,20 @@ try
     {
         var state = new State { Reminders = [new() { Title = "Test", Due = friday }], Locks = [new() { Name = "Focus" }] }; store.Save(state);
         var loaded = store.Load();
-        Equal<DateTime?>(null, loaded.Reminders[0].SnoozedUntil); Equal<DateTime?>(null, loaded.Reminders[0].LastNotified);
-        Equal<DateTime?>(null, loaded.Locks[0].Until);
+        Equal<DateTimeOffset?>(null, loaded.Reminders[0].SnoozedUntil); Equal<DateTimeOffset?>(null, loaded.Reminders[0].LastNotified);
+        Equal<DateTimeOffset?>(null, loaded.Locks[0].Until);
+    });
+    Check("stores written with local offsets load as the same instants", () =>
+    {
+        var state = new State { Reminders = [new() { Title = "Test", Due = friday }], Locks = [new() { Name = "Focus" }] }; store.Save(state);
+        string json = File.ReadAllText(store.FilePath);
+        string legacy = json.Replace("\"SnoozedUntil\": null", "\"SnoozedUntil\": \"2026-10-30T09:10:00.1234567+01:00\"")
+            .Replace("\"Until\": null", "\"Until\": \"2026-10-30T09:30:00-04:00\"");
+        if (legacy == json) throw new Exception("Test setup failed to write legacy timestamps");
+        File.WriteAllText(store.FilePath, legacy);
+        var loaded = store.Load();
+        Equal<DateTimeOffset?>(new DateTimeOffset(2026, 10, 30, 8, 10, 0, TimeSpan.Zero).AddTicks(1234567), loaded.Reminders[0].SnoozedUntil);
+        Equal<DateTimeOffset?>(new DateTimeOffset(2026, 10, 30, 13, 30, 0, TimeSpan.Zero), loaded.Locks[0].Until);
     });
     Check("incomplete store does not overwrite the last backup", () =>
     {
