@@ -9,8 +9,9 @@ struct TaskEditorView: View {
     private let original: NagTask?
     @State private var task: NagTask
     @State private var startNow: Bool
-    @State private var limitSnoozes: Bool
+    @State private var showMore = false
     @State private var confirmDelete = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(task: NagTask?) {
         self.init(task: task ?? NagTask(title: ""), original: task, startNow: task == nil)
@@ -26,43 +27,14 @@ struct TaskEditorView: View {
         self.original = original
         _task = State(initialValue: task)
         _startNow = State(initialValue: startNow)
-        _limitSnoozes = State(initialValue: task.style.maxSnoozes != nil)
     }
 
-    static let intervals = [1, 2, 5, 10, 15, 30, 60]
-    static let snoozeLengths = [5, 10, 15, 30, 60]
-    static let workLengths = [10, 15, 25, 30, 45, 60, 90]
-
     private var isCustom: Bool { task.repeatRule == .custom }
+    private var selectedPreset: NagPreset? { NagPreset.matching(task, keys: model.state.keys) }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Start from") {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(alignment: .top, spacing: 12) {
-                            ForEach(NagPreset.all) { preset in
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Button {
-                                        withAnimation(Motion.list) {
-                                            preset.apply(to: &task, keys: model.state.keys, now: .now, calendar: .current)
-                                            limitSnoozes = task.style.maxSnoozes != nil
-                                        }
-                                    } label: {
-                                        Label(preset.name, systemImage: preset.symbol)
-                                    }
-                                    .buttonStyle(.bordered)
-                                    Text(preset.summary)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                        .frame(maxWidth: 150, alignment: .leading)
-                                }
-                            }
-                        }
-                    }
-                }
-
                 Section {
                     TextField("What needs doing?", text: $task.title)
                         .font(.headline)
@@ -78,6 +50,31 @@ struct TaskEditorView: View {
                         if let link = task.link {
                             Link("Open original", destination: link)
                         }
+                    }
+                }
+
+                Section {
+                    // A Grid, not a LazyVGrid, so cards in a row share the tallest card's height.
+                    Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+                        ForEach(presetRows, id: \.first?.id) { row in
+                            GridRow {
+                                ForEach(row) { preset in
+                                    PresetCard(preset: preset, isSelected: preset == selectedPreset) {
+                                        withAnimation(Motion.quick) {
+                                            preset.apply(to: &task, keys: model.state.keys, now: .now, calendar: model.calendar)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                } header: {
+                    Text("Start from")
+                } footer: {
+                    if selectedPreset == nil {
+                        Text("Custom settings. Tap a preset to start over.")
                     }
                 }
 
@@ -114,56 +111,54 @@ struct TaskEditorView: View {
 
                 Section {
                     Picker("Nag every", selection: $task.style.intervalMinutes) {
-                        ForEach(Self.intervals, id: \.self) { Text(NagFormat.minutes($0)).tag($0) }
+                        ForEach(NagStyleChoices.minutes(NagStyleChoices.intervals, including: task.style.intervalMinutes), id: \.self) {
+                            Text(NagFormat.minutes($0)).tag($0)
+                        }
                     }
                     Picker("Escalation", selection: $task.style.escalation) {
                         ForEach(Escalation.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
-                    Picker("Tone", selection: $task.style.tone) {
-                        Text("Use the default").tag(NagTone?.none)
-                        ForEach(NagTone.allCases, id: \.self) { Text($0.label).tag(NagTone?.some($0)) }
+                    Picker("Snoozes allowed", selection: $task.style.maxSnoozes) {
+                        ForEach(NagStyleChoices.snoozeLimits(including: task.style.maxSnoozes), id: \.self) {
+                            Text(NagStyleChoices.snoozeLimitLabel($0)).tag($0)
+                        }
                     }
-                    Picker("Working time", selection: $task.style.workMinutes) {
-                        ForEach(Self.workLengths, id: \.self) { Text(NagFormat.minutes($0)).tag($0) }
+                    if !model.state.keys.isEmpty {
+                        Picker("To finish", selection: proofBinding) {
+                            Text("Tap Done").tag(UUID?.none)
+                            ForEach(model.state.keys) { key in
+                                Text("Scan \(key.name)").tag(UUID?.some(key.id))
+                            }
+                        }
                     }
-                    Toggle("Break through Focus", isOn: $task.style.breakThroughFocus)
                 } header: {
                     Text("Nagging")
-                } footer: {
-                    Text("After you tap Started, Nag goes quiet for this long, then checks in.")
-                }
-
-                Section {
-                    Picker("Snooze for", selection: $task.style.snoozeMinutes) {
-                        ForEach(Self.snoozeLengths, id: \.self) { Text(NagFormat.minutes($0)).tag($0) }
-                    }
-                    Toggle("Limit snoozes", isOn: $limitSnoozes.animation(Motion.quick))
-                    if limitSnoozes {
-                        Stepper(
-                            "\(task.style.maxSnoozes ?? 3) per occurrence",
-                            value: Binding(get: { task.style.maxSnoozes ?? 3 }, set: { task.style.maxSnoozes = $0 }),
-                            in: 0...10
-                        )
-                    }
-                } header: {
-                    Text("Snooze")
                 } footer: {
                     Text("Snoozed nags still count as due for locks.")
                 }
 
                 Section {
-                    Picker("To finish", selection: proofBinding) {
-                        Text("Tap Done").tag(UUID?.none)
-                        ForEach(model.state.keys) { key in
-                            Text("Scan \(key.name)").tag(UUID?.some(key.id))
+                    DisclosureGroup("More options", isExpanded: $showMore.animation(Motion.quick)) {
+                        Picker("Snooze for", selection: $task.style.snoozeMinutes) {
+                            ForEach(NagStyleChoices.minutes(NagStyleChoices.snoozeLengths, including: task.style.snoozeMinutes), id: \.self) {
+                                Text(NagFormat.minutes($0)).tag($0)
+                            }
                         }
+                        Picker("Tone", selection: $task.style.tone) {
+                            Text("Use the default").tag(NagTone?.none)
+                            ForEach(NagTone.allCases, id: \.self) { Text($0.label).tag(NagTone?.some($0)) }
+                        }
+                        Picker("Working time", selection: $task.style.workMinutes) {
+                            ForEach(NagStyleChoices.minutes(NagStyleChoices.workLengths, including: task.style.workMinutes), id: \.self) {
+                                Text(NagFormat.minutes($0)).tag($0)
+                            }
+                        }
+                        Toggle("Break through Focus", isOn: $task.style.breakThroughFocus)
                     }
-                } header: {
-                    Text("Proof")
                 } footer: {
-                    Text(model.state.keys.isEmpty
-                        ? "Pair an NFC tag or QR code in Settings > Unlock keys to require a scan, e.g. a sticker on the pill bottle."
-                        : "Requiring a scan means you have to go to where the task is to finish it.")
+                    if showMore {
+                        Text(moreOptionsFooter)
+                    }
                 }
 
                 if !isNew {
@@ -200,6 +195,20 @@ struct TaskEditorView: View {
                 }
             }
         }
+    }
+
+    /// Two cards per row, or one at accessibility text sizes.
+    private var presetRows: [[NagPreset]] {
+        let columns = dynamicTypeSize.isAccessibilitySize ? 1 : 2
+        return stride(from: 0, to: NagPreset.all.count, by: columns).map {
+            Array(NagPreset.all[$0..<min($0 + columns, NagPreset.all.count)])
+        }
+    }
+
+    private var moreOptionsFooter: String {
+        let working = "Working time is how long Nag stays quiet after you tap Started."
+        guard model.state.keys.isEmpty else { return working }
+        return working + " To require a scan to finish, pair an NFC tag or QR code in Settings > Unlock keys."
     }
 
     private var proofBinding: Binding<UUID?> {
@@ -258,8 +267,50 @@ struct TaskEditorView: View {
     private func save() {
         if startNow && isNew && !isCustom { task.startAt = .now }
         task.alignStartToSchedule(previous: original, now: .now, calendar: model.calendar)
-        if !limitSnoozes { task.style.maxSnoozes = nil }
         model.saveTask(task)
         dismiss()
+    }
+}
+
+/// A preset as a tappable card. The whole card is the tap target, and it shows when the nag's
+/// settings match the preset.
+private struct PresetCard: View {
+    let preset: NagPreset
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Image(systemName: preset.symbol)
+                        .font(.title3)
+                        .foregroundStyle(.tint)
+                    Spacer()
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
+                }
+                .accessibilityHidden(true)
+                Text(preset.name)
+                    .font(.headline)
+                Text(preset.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear), lineWidth: 2)
+            }
+            .contentShape(.rect(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(preset.name)
+        .accessibilityValue(preset.summary)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier("preset.\(preset.id)")
     }
 }
