@@ -5,9 +5,9 @@ name: KMP spike
 on:
   push:
     branches: [main, 'gpowel46/41-*']
-    paths: ['kmp/**', 'Fixtures/**', 'Packages/NagKit/Sources/NagCore/**', 'NagWindows/Nag.Core.Tests/ConformanceRunner.cs', '.github/workflows/kmp-spike.yml']
+    paths: ['kmp/**', 'Fixtures/**', 'Packages/NagKit/Sources/NagCore/**', 'NagWindows/Nag.Core/**', 'NagWindows/Nag.Core.Tests/**', '.github/workflows/kmp-spike.yml']
   pull_request:
-    paths: ['kmp/**', 'Fixtures/**', 'Packages/NagKit/Sources/NagCore/**', 'NagWindows/Nag.Core.Tests/ConformanceRunner.cs', '.github/workflows/kmp-spike.yml']
+    paths: ['kmp/**', 'Fixtures/**', 'Packages/NagKit/Sources/NagCore/**', 'NagWindows/Nag.Core/**', 'NagWindows/Nag.Core.Tests/**', '.github/workflows/kmp-spike.yml']
   workflow_dispatch:
 
 concurrency:
@@ -95,6 +95,8 @@ jobs:
           Get-Item kmp/nag-rules/build/bin/mingwX64/releaseShared/nagrules.dll | Select-Object Name, Length
       - name: .NET consumer (C ABI via nagrules.dll)
         run: dotnet run --project kmp/consumers/dotnet -c Release
+      - name: C# Nag.Core against the same fixtures
+        run: dotnet run --project NagWindows/Nag.Core.Tests -c Release
 
   windows-cross:
     name: Windows x64 - DLL cross-compiled on macOS
