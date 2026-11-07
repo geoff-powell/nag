@@ -191,6 +191,7 @@ NagMonitor/       DeviceActivity monitor: wakes Nag in the background
 NagShieldConfig/  The screen shown over a blocked app
 NagShieldAction/  The buttons on that screen
 NagMac/           Mac menu bar app
+CreateNag/        Create Nag intents for Siri and Shortcuts, built into both apps
 Config/           xcconfigs, Info.plists, entitlements
 ```
 
@@ -224,8 +225,17 @@ Other apps can hand Nag a nag in two ways. Both record a **source** (shown on th
 the source's **ID** for the item. Sending the same source and ID again updates that nag instead of
 adding a duplicate, and a finished one-off nag that's been moved (a rescheduled event, say) nags again.
 
-**Shortcuts and Siri.** The *Create Nag* action takes a title, notes, start, repeat, interval, source,
-source ID and link, and adds the nag straight away. That's the bridge to most other apps:
+**Siri.** Say "Nag me with Nag", or name a preset: "Add a medication nag in Nag" (also chore,
+appointment or someday). Siri asks what to nag you about, then "When should I start nagging?". Answer
+with a time ("8 PM", "tomorrow at 9", "in 20 minutes") or say "now". On iOS 27 and macOS 27, Nag also
+adopts the system's Create Reminder schema, so Apple Intelligence Siri can fill in the title, start and
+repeat from one sentence, such as "Nag me to take my meds at 8 every day". Places ("when I get home")
+aren't supported yet.
+
+**Shortcuts.** The *Create Nag* action, on iPhone and Mac, takes a title, notes, start, repeat (including
+every N days and a day of the month), interval, preset, source, source ID and link, and adds the nag
+straight away. It only asks about the start when Siri had to ask for the title, so automations run
+without questions. That's the bridge to most other apps:
 
 - Calendar: a Shortcuts automation that runs *Find Calendar Events*, then *Create Nag* for each, with
   something stable about the event (its title, say) as the source ID.
@@ -257,7 +267,9 @@ nag://add?title=Reply+to+Sam&at=2026-10-30T09:00&repeat=weekdays&source=Muse&id=
 | `source`, `id` | Who sent it, and their ID for the item. |
 | `link` | A URL that opens the original item, shown on the nag. |
 
-The parsing and update rules live in NagCore (`NagRequest`, `NagLink`) and are unit tested.
+The parsing and update rules live in NagCore (`NagRequest`, `NagLink`, and `SpokenStart` and
+`NagRecurrence` for Siri) and are unit tested. The intents themselves are in `CreateNag/`, which both
+apps build.
 
 ## AI assistants (MCP)
 

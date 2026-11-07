@@ -322,13 +322,13 @@ import Testing
     }
 
     @Test func everyRepeatRuleExceptCustomIsExpressibleInShortcuts() {
-        // Keep this set synchronized with NagRepeatOption in the app target.
+        // Keep this set synchronized with NagRepeatOption in CreateNag/CreateNagOptions.swift.
         #expect(Set(RepeatRule.allCases) == [.never, .daily, .weekdays, .weekly, .custom, .everyNDays, .monthly])
         #expect(Set(RepeatRule.allCases.filter { $0 != .custom }) == [.never, .daily, .weekdays, .weekly, .everyNDays, .monthly])
     }
 
     @Test func presetIDsAreStableAndMatchTheShortcutsEnumRawValues() {
-        // These are the raw values of NagPresetOption in CreateNagIntent.swift.
+        // These are the raw values of NagPresetOption in CreateNag/CreateNagOptions.swift.
         #expect(NagPreset.all.map(\.id) == ["medication", "chore", "appointment", "someday"])
     }
 
