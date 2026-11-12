@@ -34,7 +34,7 @@ private struct ShieldView: View {
     let onDismiss: () -> Void
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: Space.l) {
             ZStack(alignment: .bottomTrailing) {
                 Image(nsImage: app.icon)
                     .resizable()
@@ -47,7 +47,7 @@ private struct ShieldView: View {
                     .offset(x: 6, y: 6)
             }
 
-            VStack(spacing: 6) {
+            VStack(spacing: Space.xxs) {
                 Text("\(app.name) is locked")
                     .font(.title.bold())
                 Text("by \(profile.name)\(profile.strict ? " · strict" : "")")
@@ -59,18 +59,18 @@ private struct ShieldView: View {
                 .multilineTextAlignment(.center)
 
             if !remaining.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Space.s) {
                     Text("To unlock").font(.headline)
                     ForEach(remaining, id: \.self) { item in
                         Label(item, systemImage: "circle")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+                .padding(Space.m)
+                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: Radius.card))
             }
 
-            HStack {
+            HStack(spacing: Space.s) {
                 Button("OK", action: onDismiss)
                     .keyboardShortcut(.cancelAction)
                 Spacer()
@@ -79,8 +79,8 @@ private struct ShieldView: View {
             }
             .controlSize(.large)
         }
-        .padding(28)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22))
-        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(.orange.opacity(0.5), lineWidth: 1))
+        .padding(Space.xl)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Radius.panel))
+        .overlay(RoundedRectangle(cornerRadius: Radius.panel).strokeBorder(.orange.opacity(0.5), lineWidth: 1))
     }
 }

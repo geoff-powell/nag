@@ -40,9 +40,9 @@ struct TaskEditorView: View {
             Form {
                 Section("Start from") {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(alignment: .top, spacing: 12) {
+                        LazyHStack(alignment: .top, spacing: Space.m) {
                             ForEach(NagPreset.all) { preset in
-                                VStack(alignment: .leading, spacing: 6) {
+                                VStack(alignment: .leading, spacing: Space.s) {
                                     Button {
                                         withAnimation(Motion.list) {
                                             preset.apply(to: &task, keys: model.state.keys, now: .now, calendar: .current)
@@ -212,11 +212,11 @@ struct TaskEditorView: View {
     private var timesSection: some View {
         Section {
             ForEach($task.times) { $time in
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: Space.s) {
                     DatePicker("Time", selection: minuteBinding($time.minute), displayedComponents: .hourAndMinute)
                     WeekdayPicker(selection: $time.weekdays)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, Space.xs)
             }
             .onDelete { offsets in
                 withAnimation(Motion.list) { task.times.remove(atOffsets: offsets) }

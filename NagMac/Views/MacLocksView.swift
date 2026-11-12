@@ -60,18 +60,18 @@ private struct MacLockRow: View {
     @Environment(MacModel.self) private var model
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Space.m) {
             Image(systemName: profile.symbol)
                 .font(.title2)
                 .foregroundStyle(profile.isShielding(at: now) ? .orange : .secondary)
-                .frame(width: 30)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
+                .frame(width: Metrics.iconColumn)
+            VStack(alignment: .leading, spacing: Space.xs) {
+                HStack(spacing: Space.s) {
                     Text(profile.name).font(.headline)
-                    MacStatusPill(profile: profile, now: now)
+                    StatusPill(profile: profile, now: now)
                     if profile.strict { Text("Strict").font(.caption).foregroundStyle(.secondary) }
                 }
-                HStack(spacing: 4) {
+                HStack(spacing: Space.xs) {
                     ForEach(profile.blockedApps.prefix(8)) { app in
                         Image(nsImage: app.icon).resizable().frame(width: 18, height: 18).help(app.name)
                     }
@@ -95,7 +95,7 @@ private struct MacLockRow: View {
                 }
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, Space.xs)
         .contextMenu {
             Button("Edit…", action: onEdit).disabled(profile.isEngaged)
             Button("Delete", role: .destructive) { model.deleteProfile(profile.id) }
@@ -211,8 +211,8 @@ struct MacLockEditor: View {
     private var appsSection: some View {
         Section("Block these apps") {
             ForEach(apps) { app in
-                HStack {
-                    Image(nsImage: app.icon).resizable().frame(width: 20, height: 20)
+                HStack(spacing: Space.s) {
+                    Image(nsImage: app.icon).resizable().frame(width: Metrics.iconColumnCompact, height: Metrics.iconColumnCompact)
                     Text(app.name)
                     Spacer()
                     Button {

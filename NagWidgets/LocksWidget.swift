@@ -1,4 +1,5 @@
 import NagCore
+import NagKit
 import SwiftUI
 import WidgetKit
 
@@ -23,7 +24,7 @@ struct LocksView: View {
         Group {
             if snapshot.locks.isEmpty {
                 Link(destination: NagRoute.nags.url) {
-                    VStack(spacing: 6) {
+                    VStack(spacing: Space.s) {
                         Image(systemName: "lock.open.fill").font(.title)
                         Text("Nothing locked").font(.headline)
                     }
@@ -32,7 +33,7 @@ struct LocksView: View {
             } else if family == .accessoryRectangular {
                 LockRowView(summary: snapshot.locks[0], compact: true)
             } else {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Space.s) {
                     ForEach(Array(snapshot.locks.prefix(3))) { summary in
                         LockRowView(summary: summary)
                     }
