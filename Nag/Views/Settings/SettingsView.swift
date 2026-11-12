@@ -117,7 +117,7 @@ struct SettingsView: View {
 
     /// Looks like a large navigation title. Long-press it to show the app version underneath.
     private var title: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Space.xxs) {
             Text("Settings")
                 .font(.largeTitle.bold())
                 .foregroundStyle(Color.primary)

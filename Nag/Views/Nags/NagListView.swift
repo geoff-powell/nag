@@ -28,7 +28,7 @@ struct NagListView: View {
         }
         .overlay(alignment: .bottom) {
             if let undo {
-                HStack(spacing: 10) {
+                HStack(spacing: Space.m) {
                     Text("Marked done")
                     Button("Undo") {
                         withAnimation(Motion.list) {
@@ -40,11 +40,11 @@ struct NagListView: View {
                     Button("Dismiss", systemImage: "xmark") { self.undo = nil }
                         .labelStyle(.iconOnly)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.horizontal, Space.l)
+                .padding(.vertical, Space.s)
                 .background(.regularMaterial, in: Capsule())
                 .shadow(radius: 4, y: 2)
-                .padding(.bottom, 12)
+                .padding(.bottom, Space.m)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
