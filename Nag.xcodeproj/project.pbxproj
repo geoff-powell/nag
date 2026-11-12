@@ -56,6 +56,13 @@
 			remoteGlobalIDString = AA0000000000000000000040;
 			remoteInfo = Nag;
 		};
+		AA00000000000000000000B4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA0000000000000000000044;
+			remoteInfo = NagMac;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -84,6 +91,7 @@
 		AA0000000000000000000013 /* NagShieldAction.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NagShieldAction.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000014 /* Nag.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Nag.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000015 /* NagUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NagUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0000000000000000000016 /* NagMacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NagMacUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000030 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
 		AA0000000000000000000031 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		AA0000000000000000000032 /* Nag-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Nag-Info.plist"; sourceTree = "<group>"; };
@@ -100,58 +108,47 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		5BE1429C467D86951F1B80F4 /* NagWidgets */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = NagWidgets;
 			sourceTree = "<group>";
 		};
 		AA0000000000000000000020 /* Nag */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = Nag;
 			sourceTree = "<group>";
 		};
 		AA0000000000000000000021 /* NagMonitor */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = NagMonitor;
 			sourceTree = "<group>";
 		};
 		AA0000000000000000000022 /* NagShieldConfig */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = NagShieldConfig;
 			sourceTree = "<group>";
 		};
 		AA0000000000000000000023 /* NagShieldAction */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = NagShieldAction;
 			sourceTree = "<group>";
 		};
 		AA0000000000000000000024 /* NagMac */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = NagMac;
 			sourceTree = "<group>";
 		};
 		AA0000000000000000000025 /* NagUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = NagUITests;
 			sourceTree = "<group>";
 		};
 		AA0000000000000000000026 /* NagIntents */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = NagIntents;
+			sourceTree = "<group>";
+		};
+		AA0000000000000000000027 /* NagMacUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = NagMacUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -205,6 +202,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA0000000000000000000064 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		C3EB1D5E661C0598D207174F /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -226,6 +230,7 @@
 				AA0000000000000000000024 /* NagMac */,
 				AA0000000000000000000025 /* NagUITests */,
 				AA0000000000000000000026 /* NagIntents */,
+				AA0000000000000000000027 /* NagMacUITests */,
 				5BE1429C467D86951F1B80F4 /* NagWidgets */,
 				AA0000000000000000000004 /* Config */,
 				AA0000000000000000000003 /* Products */,
@@ -241,6 +246,7 @@
 				AA0000000000000000000013 /* NagShieldAction.appex */,
 				AA0000000000000000000014 /* Nag.app */,
 				AA0000000000000000000015 /* NagUITests.xctest */,
+				AA0000000000000000000016 /* NagMacUITests.xctest */,
 				92CB871E7BB35C3AF50E5EC6 /* NagWidgets.appex */,
 			);
 			name = Products;
@@ -435,6 +441,27 @@
 			productReference = AA0000000000000000000015 /* NagUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		AA0000000000000000000046 /* NagMacUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA00000000000000000000D5 /* Build configuration list for PBXNativeTarget "NagMacUITests" */;
+			buildPhases = (
+				AA0000000000000000000063 /* Sources */,
+				AA0000000000000000000064 /* Frameworks */,
+				AA0000000000000000000065 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AA00000000000000000000A4 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AA0000000000000000000027 /* NagMacUITests */,
+			);
+			name = NagMacUITests;
+			productName = NagMacUITests;
+			productReference = AA0000000000000000000016 /* NagMacUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -467,6 +494,10 @@
 						CreatedOnToolsVersion = 27.1;
 						TestTargetID = AA0000000000000000000040;
 					};
+					AA0000000000000000000046 = {
+						CreatedOnToolsVersion = 27.1;
+						TestTargetID = AA0000000000000000000044;
+					};
 				};
 			};
 			buildConfigurationList = AA00000000000000000000C0 /* Build configuration list for PBXProject "Nag" */;
@@ -479,7 +510,7 @@
 			mainGroup = AA0000000000000000000002;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				AA0000000000000000000090 /* XCLocalSwiftPackageReference "NagKit" */,
+				AA0000000000000000000090 /* XCLocalSwiftPackageReference "Packages/NagKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = AA0000000000000000000003 /* Products */;
@@ -493,6 +524,7 @@
 				AA0000000000000000000044 /* NagMac */,
 				AA0000000000000000000045 /* NagUITests */,
 				16239FD69BC4C5338A95F10E /* NagWidgets */,
+				AA0000000000000000000046 /* NagMacUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -534,6 +566,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		AA0000000000000000000062 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA0000000000000000000065 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -599,6 +638,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA0000000000000000000063 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -627,6 +673,11 @@
 			isa = PBXTargetDependency;
 			target = AA0000000000000000000040 /* Nag */;
 			targetProxy = AA00000000000000000000B3 /* PBXContainerItemProxy */;
+		};
+		AA00000000000000000000A4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AA0000000000000000000044 /* NagMac */;
+			targetProxy = AA00000000000000000000B4 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -979,6 +1030,34 @@
 			};
 			name = Release;
 		};
+		AA00000000000000000000D6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "$(NAG_MAC_SIGN_IDENTITY)";
+				CODE_SIGN_STYLE = "$(NAG_MAC_CODE_SIGN_STYLE)";
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(NAG_BUNDLE_ID).mac.uitests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				TEST_TARGET_NAME = NagMac;
+			};
+			name = Debug;
+		};
+		AA00000000000000000000D7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "$(NAG_MAC_SIGN_IDENTITY)";
+				CODE_SIGN_STYLE = "$(NAG_MAC_CODE_SIGN_STYLE)";
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(NAG_BUNDLE_ID).mac.uitests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				TEST_TARGET_NAME = NagMac;
+			};
+			name = Release;
+		};
 		C7AB4B1F213D58E01D6A31A3 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1079,10 +1158,19 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		AA00000000000000000000D5 /* Build configuration list for PBXNativeTarget "NagMacUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA00000000000000000000D6 /* Debug */,
+				AA00000000000000000000D7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		AA0000000000000000000090 /* XCLocalSwiftPackageReference "NagKit" */ = {
+		AA0000000000000000000090 /* XCLocalSwiftPackageReference "Packages/NagKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/NagKit;
 		};
@@ -1091,37 +1179,37 @@
 /* Begin XCSwiftPackageProductDependency section */
 		AA0000000000000000000080 /* NagKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AA0000000000000000000090 /* XCLocalSwiftPackageReference "NagKit" */;
+			package = AA0000000000000000000090 /* XCLocalSwiftPackageReference "Packages/NagKit" */;
 			productName = NagKit;
 		};
 		AA0000000000000000000081 /* NagKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AA0000000000000000000090 /* XCLocalSwiftPackageReference "NagKit" */;
+			package = AA0000000000000000000090 /* XCLocalSwiftPackageReference "Packages/NagKit" */;
 			productName = NagKit;
 		};
 		AA0000000000000000000082 /* NagKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AA0000000000000000000090 /* XCLocalSwiftPackageReference "NagKit" */;
+			package = AA0000000000000000000090 /* XCLocalSwiftPackageReference "Packages/NagKit" */;
 			productName = NagKit;
 		};
 		AA0000000000000000000083 /* NagKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AA0000000000000000000090 /* XCLocalSwiftPackageReference "NagKit" */;
+			package = AA0000000000000000000090 /* XCLocalSwiftPackageReference "Packages/NagKit" */;
 			productName = NagKit;
 		};
 		AA0000000000000000000084 /* NagKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AA0000000000000000000090 /* XCLocalSwiftPackageReference "NagKit" */;
+			package = AA0000000000000000000090 /* XCLocalSwiftPackageReference "Packages/NagKit" */;
 			productName = NagKit;
 		};
 		AA0000000000000000000089 /* NagMCP */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AA0000000000000000000090 /* XCLocalSwiftPackageReference "NagKit" */;
+			package = AA0000000000000000000090 /* XCLocalSwiftPackageReference "Packages/NagKit" */;
 			productName = NagMCP;
 		};
 		B928687E80F72FF15DDF6ED5 /* NagKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AA0000000000000000000090 /* XCLocalSwiftPackageReference "NagKit" */;
+			package = AA0000000000000000000090 /* XCLocalSwiftPackageReference "Packages/NagKit" */;
 			productName = NagKit;
 		};
 /* End XCSwiftPackageProductDependency section */
