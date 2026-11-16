@@ -114,6 +114,7 @@ public struct NagPlanner: Sendable {
         tasks: [NagTask],
         quietHours: QuietHours,
         tone: NagTone = .standard,
+        handoffUntil: Date? = nil,
         now: Date
     ) -> NagPlan {
         var repeating: [PlannedNotification] = []
@@ -125,6 +126,10 @@ public struct NagPlanner: Sendable {
 
         let quietNow = quietHours.contains(now, calendar: calendar)
         let until = now.addingTimeInterval(horizon)
+        // Another device has the nag until this moment: sparse reminders before it, the usual escalation
+        // after it, and a wake-up at it so repeating notifications come back.
+        let handoff = handoffUntil.flatMap { $0 > now ? $0 : nil }
+        if let handoff { considerWake(handoff) }
 
         for task in tasks {
             guard let start = task.nagStart else { continue }
@@ -138,7 +143,7 @@ public struct NagPlanner: Sendable {
             )
             let prefix = "\(NagID.nagNotificationPrefix)\(task.id.uuidString)|"
 
-            if start <= now, allowRepeating, !quietNow {
+            if start <= now, allowRepeating, !quietNow, handoff == nil {
                 let overdue = now.timeIntervalSince(task.startAt)
                 let escalation = checkIn ? Escalation.steady : task.style.escalation
                 let seconds = Int(escalation.interval(base: base, overdue: overdue).rounded())
@@ -164,7 +169,23 @@ public struct NagPlanner: Sendable {
             }
 
             considerWake(start)
-            for (date, number) in fireDates(for: task, from: start, base: base, checkIn: checkIn, quietHours: quietHours, now: now, until: until) {
+            let dates: [(date: Date, number: Int)]
+            if let handoff {
+                dates = handoffFireDates(
+                    for: task,
+                    from: start,
+                    base: base,
+                    checkIn: checkIn,
+                    handoffUntil: handoff,
+                    resumesRepeating: start <= now && allowRepeating && !quietNow,
+                    quietHours: quietHours,
+                    now: now,
+                    until: until
+                )
+            } else {
+                dates = fireDates(for: task, from: start, base: base, checkIn: checkIn, quietHours: quietHours, now: now, until: until)
+            }
+            for (date, number) in dates {
                 let overdue = date.timeIntervalSince(task.startAt)
                 oneOffs.append((date, PlannedNotification(
                     identifier: "\(prefix)\(Int(date.timeIntervalSince1970))|\(contentKey)",
@@ -202,6 +223,65 @@ public struct NagPlanner: Sendable {
             nextWake: wake,
             outstandingCount: tasks.filter { $0.isOutstanding(at: now) }.count
         )
+    }
+
+    /// Fire dates while another device has the nag: one-offs every `DeviceHandoff.reducedInterval` from
+    /// `start` up to `handoffUntil`, then the usual curve. Both parts stay anchored on `start` so
+    /// re-planning keeps the same dates.
+    ///
+    /// A nag that's already due would normally get a repeating notification. Here it gets one-offs from
+    /// `handoffUntil` on instead, stepping along its escalation from that point. They keep it nagging at
+    /// full pace if the wake-up at `handoffUntil` that brings repeating back comes late.
+    func handoffFireDates(
+        for task: NagTask,
+        from start: Date,
+        base: TimeInterval,
+        checkIn: Bool,
+        handoffUntil: Date,
+        resumesRepeating: Bool,
+        quietHours: QuietHours,
+        now: Date,
+        until: Date
+    ) -> [(date: Date, number: Int)] {
+        var result: [(date: Date, number: Int)] = []
+        func append(_ date: Date, _ number: Int) {
+            if date > now, date <= until, result.last.map({ $0.date < date }) ?? true, result.count < maxPending {
+                result.append((date, number))
+            }
+        }
+
+        let reduced = max(DeviceHandoff.reducedInterval, base)
+        // Start from the last step at or before `now`, so long-overdue nags don't loop from their start.
+        var step = max(0, (now.timeIntervalSince(start) / reduced).rounded(.down))
+        var number = 0
+        while result.count < maxPending {
+            let next = start.addingTimeInterval(step * reduced)
+            guard next < handoffUntil, next <= until else { break }
+            step += 1
+            number = Int(step)
+            let fire = quietHours.nextAllowed(after: next, calendar: calendar)
+            if fire < handoffUntil { append(fire, number) }
+        }
+
+        let escalation = checkIn ? Escalation.steady : task.style.escalation
+        if resumesRepeating {
+            var next = handoffUntil
+            var number = max(2, number + 1)
+            var iterations = 0
+            while next <= until, result.count < maxPending, iterations < 20_000 {
+                iterations += 1
+                let fire = quietHours.nextAllowed(after: next, calendar: calendar)
+                append(fire, number)
+                number += 1
+                next = fire.addingTimeInterval(escalation.interval(base: base, overdue: fire.timeIntervalSince(task.startAt)))
+            }
+        } else {
+            for date in fireDates(for: task, from: start, base: base, checkIn: checkIn, quietHours: quietHours, now: now, until: until)
+            where date.date >= handoffUntil {
+                append(date.date, date.number)
+            }
+        }
+        return result
     }
 
     /// Fire dates after `now`, following the escalation curve from `start`. Anchored on `start` rather than

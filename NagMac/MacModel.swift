@@ -43,6 +43,8 @@ final class MacModel {
     @ObservationIgnored private var changeObservation: SharedStore.ChangeObservation?
     @ObservationIgnored private var cloudSync: CloudTaskSync?
     @ObservationIgnored private var quietHoursSync: QuietHoursSync?
+    @ObservationIgnored private var heartbeatSync: DeviceHeartbeatSync?
+    @ObservationIgnored private let presence = MacPresence()
     @ObservationIgnored private var tickTask: Task<Void, Never>?
     @ObservationIgnored private var notificationTask: Task<Void, Never>?
     @ObservationIgnored private var lastNotificationSync = Date.distantPast
@@ -74,6 +76,12 @@ final class MacModel {
         }
         quietHoursSync = quietHours
         quietHours.start()
+        // The Mac only publishes. Its own nagging never depends on the iPhone's heartbeat.
+        let heartbeat = DeviceHeartbeatSync(platform: .mac, store: store) {}
+        heartbeatSync = heartbeat
+        heartbeat.start()
+        presence.onChange = { [weak self] in self?.publishPresence() }
+        presence.start()
 
         tickTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -104,6 +112,22 @@ final class MacModel {
         if changed || now.timeIntervalSince(lastNotificationSync) >= 60 {
             syncNotifications()
         }
+        publishPresence(now: now)
+    }
+
+    /// Tells the iPhone whether this Mac is carrying the nag. Rate limited by `DeviceHeartbeatSync`.
+    func publishPresence(now: Date = .now) {
+        let canNag = NagPanelController.isEnabled
+            || notificationStatus == .authorized
+            || notificationStatus == .provisional
+        let activity = DeviceHandoff.macActivity(
+            secondsSinceInput: presence.secondsSinceInput,
+            screenLocked: presence.screenLocked,
+            asleep: presence.asleep,
+            canNag: canNag,
+            enabled: state.settings.deviceHandoff
+        )
+        heartbeatSync?.publish(activity, now: now)
     }
 
     func reload() {

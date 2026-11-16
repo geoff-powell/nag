@@ -19,7 +19,9 @@ struct NagApp: App {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active: appDelegate.model.becameActive()
-            case .background: BackgroundRefresh.schedule()
+            case .background:
+                appDelegate.model.enteredBackground()
+                BackgroundRefresh.schedule()
             default: break
             }
         }
