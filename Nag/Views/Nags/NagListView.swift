@@ -8,6 +8,8 @@ struct NagListView: View {
     @State private var feedbackTick = 0
     @State private var undo: (taskID: UUID, deadline: Date)?
     @State private var snoozeTaskID: UUID?
+    @State private var quickText = ""
+    @State private var readingQuickAdd = false
 
     var body: some View {
         NavigationStack {
@@ -23,7 +25,10 @@ struct NagListView: View {
                 }
             }
             .sheet(item: $editor) { item in
-                TaskEditorView(task: item.task)
+                switch item {
+                case .draft(let draft): TaskEditorView(draft: draft)
+                default: TaskEditorView(task: item.task)
+                }
             }
         }
         .overlay(alignment: .bottom) {
@@ -92,6 +97,9 @@ struct NagListView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
+        .safeAreaInset(edge: .top) {
+            if model.assistantEnabled { quickAddField }
+        }
         // Also animates changes that don't come from a tap here: a nag coming due, or Done and
         // Snooze from a notification or another device.
         .animation(Motion.list, value: groups.signature)
@@ -105,6 +113,39 @@ struct NagListView: View {
             ForEach(SnoozeOption.allCases, id: \.self) { option in
                 Button(option.label) { snooze(taskID, minutes: option.minutes) }
             }
+        }
+    }
+
+    /// Typed or dictated text like "dentist thu 3pm", read on device and opened in the editor to check.
+    private var quickAddField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "sparkles")
+                .foregroundStyle(.secondary)
+            TextField("Quick add, like “dentist thu 3pm”", text: $quickText)
+                .submitLabel(.done)
+                .onSubmit(readQuickAdd)
+                .disabled(readingQuickAdd)
+                .accessibilityIdentifier("quickAdd")
+            if readingQuickAdd {
+                ProgressView()
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
+        .padding(.bottom, 6)
+    }
+
+    private func readQuickAdd() {
+        let text = quickText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !readingQuickAdd else { return }
+        readingQuickAdd = true
+        Task {
+            defer { readingQuickAdd = false }
+            guard let draft = try? await model.quickAddDraft(text) else { return }
+            quickText = ""
+            editor = .draft(draft)
         }
     }
 
@@ -237,11 +278,14 @@ struct NagListView: View {
 enum TaskEditorItem: Identifiable {
     case new
     case edit(NagTask)
+    /// A nag read from quick-add text, waiting to be checked and saved.
+    case draft(NagDraft)
 
     var id: String {
         switch self {
         case .new: "new"
         case .edit(let task): task.id.uuidString
+        case .draft(let draft): "draft-\(draft.task.id.uuidString)"
         }
     }
 
@@ -249,6 +293,7 @@ enum TaskEditorItem: Identifiable {
         switch self {
         case .new: nil
         case .edit(let task): task
+        case .draft(let draft): draft.original
         }
     }
 }

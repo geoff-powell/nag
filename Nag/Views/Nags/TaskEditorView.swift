@@ -11,7 +11,14 @@ struct TaskEditorView: View {
     @State private var startNow: Bool
     @State private var limitSnoozes: Bool
     @State private var confirmDelete = false
+    @State private var suggesting: Suggestion?
     @FocusState private var focusedStep: UUID?
+
+    /// Apple Intelligence help in progress.
+    private enum Suggestion {
+        case firstStep
+        case steps
+    }
 
     init(task: NagTask?) {
         self.init(task: task ?? NagTask(title: ""), original: task, startNow: task == nil)
@@ -70,6 +77,10 @@ struct TaskEditorView: View {
                         .font(.headline)
                     TextField("Notes, or the first tiny step", text: $task.notes, axis: .vertical)
                         .lineLimit(1...4)
+                    if model.assistantEnabled {
+                        suggestButton("Suggest a first step", for: .firstStep, action: suggestFirstStep)
+                            .accessibilityIdentifier("assistant.firstStep")
+                    }
                 }
 
                 stepsSection
@@ -271,6 +282,10 @@ struct TaskEditorView: View {
             }
             Button("Add step", systemImage: "plus", action: addStep)
                 .accessibilityIdentifier("addStep")
+            if model.assistantEnabled, task.steps.allSatisfy({ $0.title.trimmingCharacters(in: .whitespaces).isEmpty }) {
+                suggestButton("Break into steps", for: .steps, action: suggestSteps)
+                    .accessibilityIdentifier("assistant.steps")
+            }
         } header: {
             HStack {
                 Text("Steps")
@@ -290,6 +305,45 @@ struct TaskEditorView: View {
                     ? "About \(NagFormat.minutes(total)) in all. Each step done pauses nagging for the next step's estimate."
                     : "Each step done pauses nagging for a while. Add estimates to see when you'll finish.")
             }
+        }
+    }
+
+    private func suggestButton(_ title: String, for kind: Suggestion, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Label(title, systemImage: "sparkles")
+                if suggesting == kind {
+                    Spacer()
+                    ProgressView()
+                }
+            }
+        }
+        .disabled(suggesting != nil || task.title.trimmingCharacters(in: .whitespaces).isEmpty)
+    }
+
+    /// Fills the notes with a first tiny step, after anything already there. Stays editable.
+    private func suggestFirstStep() {
+        suggesting = .firstStep
+        let (title, notes) = (task.title, task.notes)
+        Task {
+            defer { suggesting = nil }
+            guard let step = await model.assistant.firstStep(title: title, notes: notes) else { return }
+            withAnimation(Motion.quick) {
+                let existing = task.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+                task.notes = existing.isEmpty ? step : "\(existing)\n\(step)"
+            }
+        }
+    }
+
+    /// Fills the steps with a suggested breakdown. Only offered while there are no steps to overwrite.
+    private func suggestSteps() {
+        suggesting = .steps
+        let (title, notes) = (task.title, task.notes)
+        Task {
+            defer { suggesting = nil }
+            let steps = await model.assistant.steps(title: title, notes: notes)
+            guard !steps.isEmpty else { return }
+            withAnimation(Motion.list) { task.steps = steps }
         }
     }
 

@@ -114,6 +114,7 @@ public struct NagPlanner: Sendable {
         tasks: [NagTask],
         quietHours: QuietHours,
         tone: NagTone = .standard,
+        wording: [String: NagWording] = [:],
         now: Date
     ) -> NagPlan {
         var repeating: [PlannedNotification] = []
@@ -134,9 +135,12 @@ public struct NagPlanner: Sendable {
             if checkIn, let workingUntil = task.workingUntil() { considerWake(workingUntil) }
             let category = NagID.Category.forTask(task, canSnooze: (task.snoozesLeft ?? 1) > 0)
             let step = NagMessages.stepLine(for: task)
+            // Lines written on this device for this nag, if they still fit its title and tone.
+            let pool = wording[task.id.uuidString].flatMap { $0.applies(to: task, tone: effectiveTone) ? $0.lines : nil }
             let contentKey = StableHash.hex(
                 "\(task.title)|\(task.notes)|\(category)|\(task.style.breakThroughFocus)|\(effectiveTone.rawValue)|\(checkIn)"
                     + (step.map { "|\($0)" } ?? "")
+                    + (pool.map { "|w:\($0.joined(separator: "\n"))" } ?? "")
             )
             let prefix = "\(NagID.nagNotificationPrefix)\(task.id.uuidString)|"
 
@@ -152,7 +156,8 @@ public struct NagPlanner: Sendable {
                     title: task.title,
                     body: NagMessages.withStep(step, checkIn
                         ? NagMessages.checkInRepeatingBody(title: task.title, tone: effectiveTone)
-                        : NagMessages.repeatingBody(title: task.title, tier: tier, tone: effectiveTone)),
+                        : NagMessages.pooledRepeatingLine(pool, tier: tier)
+                            ?? NagMessages.repeatingBody(title: task.title, tier: tier, tone: effectiveTone)),
                     category: category,
                     timeSensitive: task.style.breakThroughFocus
                 ))
@@ -180,7 +185,7 @@ public struct NagPlanner: Sendable {
                             working: date.timeIntervalSince(start),
                             tone: effectiveTone
                         )
-                        : NagMessages.body(
+                        : NagMessages.pooledLine(pool, number: number) ?? NagMessages.body(
                             title: task.title,
                             notes: task.notes,
                             number: number,

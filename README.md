@@ -259,6 +259,25 @@ nag://add?title=Reply+to+Sam&at=2026-10-30T09:00&repeat=weekdays&source=Muse&id=
 
 The parsing and update rules live in NagCore (`NagRequest`, `NagLink`) and are unit tested.
 
+## Apple Intelligence
+
+On an iPhone or Mac with Apple Intelligence (iOS and macOS 26), turning on *Use Apple Intelligence* in
+Settings adds some on-device help. It's off by default, and none of it shows where the model isn't
+available.
+
+- **Suggest a first step** in the editor fills the notes with one small action to get going.
+- **Break into steps** fills an empty step list with a suggested routine.
+- **Quick add** (above the nag list on iPhone, the sparkles button or ⌘Return in the Mac menu bar) reads text
+  like "dentist thu 3pm" or "bins every tuesday 7pm" and opens the editor filled in. Nothing is saved
+  until you tap Save. If it can't read the text, the editor opens with what you typed as the title.
+- **Fresh wording.** Saving a nag writes a few extra notification lines in its tone. From the third nag
+  on, every other nag uses one of them, so the built-in lines, which get firmer the longer you wait,
+  still come through. The lines stay on the device that wrote them and aren't synced.
+
+Everything runs on device; nothing is sent to a server. The model's output is checked in NagCore
+(`AssistantOutput`, `QuickAddFields`) before it reaches a nag: lengths and step counts are capped,
+blanks and repeats are dropped, and quick-add dates are worked out by Nag rather than the model.
+
 ## AI assistants (MCP)
 
 The Mac app is also a [Model Context Protocol](https://modelcontextprotocol.io) server. It offers four

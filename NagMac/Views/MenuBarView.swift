@@ -4,6 +4,7 @@ import SwiftUI
 struct MenuBarView: View {
     @Environment(MacModel.self) private var model
     @State private var quickTitle = ""
+    @State private var readingQuickAdd = false
     @State private var undo: (taskID: UUID, deadline: Date)?
 
     var body: some View {
@@ -17,12 +18,26 @@ struct MenuBarView: View {
     private func content(now: Date) -> some View {
         let groups = MacNagGroups(tasks: model.state.tasks, now: now, calendar: model.calendar)
         return VStack(alignment: .leading, spacing: 12) {
-            TextField("Add a nag and press Return", text: $quickTitle)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit {
-                    model.quickAdd(quickTitle)
-                    quickTitle = ""
+            HStack(spacing: 6) {
+                TextField("Add a nag and press Return", text: $quickTitle)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit {
+                        model.quickAdd(quickTitle)
+                        quickTitle = ""
+                    }
+                if model.assistantEnabled {
+                    if readingQuickAdd {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button("Read with Apple Intelligence", systemImage: "sparkles", action: readQuickAdd)
+                            .labelStyle(.iconOnly)
+                            .buttonStyle(.borderless)
+                            .keyboardShortcut(.return, modifiers: .command)
+                            .disabled(quickTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .help("Read the time and repeat from what you typed, like “dentist thu 3pm”, then check it in the editor (⌘Return)")
+                    }
                 }
+            }
 
             if groups.now.isEmpty {
                 Label("Nothing due. Nice.", systemImage: "checkmark.seal")
@@ -100,6 +115,16 @@ struct MenuBarView: View {
         }
         .padding(14)
         .animation(.snappy(duration: 0.38), value: undo?.deadline)
+    }
+
+    private func readQuickAdd() {
+        let text = quickTitle
+        readingQuickAdd = true
+        Task {
+            await model.quickAddWithAssistant(text)
+            quickTitle = ""
+            readingQuickAdd = false
+        }
     }
 
     private func showUndo(for taskID: UUID) {
