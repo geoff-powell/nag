@@ -79,6 +79,27 @@ public struct PlannedNotification: Hashable, Sendable {
     public var body: String
     public var category: String
     public var timeSensitive: Bool
+    public var filterCriteria: String
+
+    public init(
+        identifier: String,
+        taskID: UUID,
+        trigger: Trigger,
+        title: String,
+        body: String,
+        category: String,
+        timeSensitive: Bool,
+        filterCriteria: String = FocusUrgency.systemFilterCriteria
+    ) {
+        self.identifier = identifier
+        self.taskID = taskID
+        self.trigger = trigger
+        self.title = title
+        self.body = body
+        self.category = category
+        self.timeSensitive = timeSensitive
+        self.filterCriteria = filterCriteria
+    }
 }
 
 public struct NagPlan: Hashable, Sendable {
@@ -113,9 +134,17 @@ public struct NagPlanner: Sendable {
     public func plan(
         tasks: [NagTask],
         quietHours: QuietHours,
+        focusFilter: FocusFilter = FocusFilter(),
         tone: NagTone = .standard,
         now: Date
     ) -> NagPlan {
+        let outstandingCount = tasks.filter { $0.isOutstanding(at: now) }.count
+        // A Focus filter that switches quiet hours on silences all nags until the Focus ends. No wake-up
+        // is planned: the system runs the Focus filter intent when the Focus ends, which re-plans.
+        if focusFilter.quietHours {
+            return NagPlan(notifications: [], nextWake: nil, outstandingCount: outstandingCount)
+        }
+
         var repeating: [PlannedNotification] = []
         var oneOffs: [(date: Date, notification: PlannedNotification)] = []
         var wake: Date?
@@ -127,14 +156,15 @@ public struct NagPlanner: Sendable {
         let until = now.addingTimeInterval(horizon)
 
         for task in tasks {
-            guard let start = task.nagStart else { continue }
+            guard focusFilter.allows(task.style), let start = task.nagStart else { continue }
             let effectiveTone = task.style.tone ?? tone
             let base = TimeInterval(max(1, task.style.intervalMinutes) * 60)
             let checkIn = task.isStarted(at: now)
             if checkIn, let workingUntil = task.workingUntil() { considerWake(workingUntil) }
             let category = NagID.Category.forTask(task, canSnooze: (task.snoozesLeft ?? 1) > 0)
+            let filterCriteria = FocusUrgency.filterCriteria(for: task.style)
             let contentKey = StableHash.hex(
-                "\(task.title)|\(task.notes)|\(category)|\(task.style.breakThroughFocus)|\(effectiveTone.rawValue)|\(checkIn)"
+                "\(task.title)|\(task.notes)|\(category)|\(task.style.breakThroughFocus)|\(filterCriteria)|\(effectiveTone.rawValue)|\(checkIn)"
             )
             let prefix = "\(NagID.nagNotificationPrefix)\(task.id.uuidString)|"
 
@@ -152,7 +182,8 @@ public struct NagPlanner: Sendable {
                         ? NagMessages.checkInRepeatingBody(title: task.title, tone: effectiveTone)
                         : NagMessages.repeatingBody(title: task.title, tier: tier, tone: effectiveTone),
                     category: category,
-                    timeSensitive: task.style.breakThroughFocus
+                    timeSensitive: task.style.breakThroughFocus,
+                    filterCriteria: filterCriteria
                 ))
                 if let tightening = escalation.nextTightening(base: base, overdue: overdue) {
                     considerWake(task.startAt.addingTimeInterval(tightening))
@@ -186,12 +217,13 @@ public struct NagPlanner: Sendable {
                             tone: effectiveTone
                         ),
                     category: category,
-                    timeSensitive: task.style.breakThroughFocus
+                    timeSensitive: task.style.breakThroughFocus,
+                    filterCriteria: filterCriteria
                 )))
             }
         }
 
-        if quietNow, tasks.contains(where: { $0.isNagging(at: now) }) {
+        if quietNow, tasks.contains(where: { focusFilter.allows($0.style) && $0.isNagging(at: now) }) {
             considerWake(quietHours.nextAllowed(after: now, calendar: calendar))
         }
 
@@ -200,7 +232,7 @@ public struct NagPlanner: Sendable {
         return NagPlan(
             notifications: repeating + oneOffs.prefix(budget).map(\.notification),
             nextWake: wake,
-            outstandingCount: tasks.filter { $0.isOutstanding(at: now) }.count
+            outstandingCount: outstandingCount
         )
     }
 

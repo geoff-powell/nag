@@ -84,7 +84,7 @@ private struct MacNagRow: View {
     @Environment(MacModel.self) private var model
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Space.m) {
             Button {
                 if task.isFinished { model.reopen(task.id) } else { model.complete(task.id) }
             } label: {
@@ -96,7 +96,7 @@ private struct MacNagRow: View {
             .buttonStyle(.plain)
             .disabled(!task.isFinished && (model.needsPhoneScan(task) || !task.canComplete(at: now, calendar: model.calendar)))
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(task.title)
                     .fontWeight(task.isOutstanding(at: now) ? .semibold : .regular)
                     .strikethrough(task.isFinished)
@@ -129,7 +129,7 @@ private struct MacNagRow: View {
                     .controlSize(.small)
             }
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, Space.xs)
         .contentShape(Rectangle())
         .onTapGesture(count: 2, perform: onEdit)
         .contextMenu {
@@ -209,9 +209,9 @@ struct MacTaskEditor: View {
         VStack(spacing: 0) {
             Form {
                 Section("Start from") {
-                    HStack(alignment: .top) {
+                    HStack(alignment: .top, spacing: Space.m) {
                         ForEach(NagPreset.all) { preset in
-                            VStack(alignment: .leading, spacing: 6) {
+                            VStack(alignment: .leading, spacing: Space.s) {
                                 Button {
                                     preset.apply(to: &task, keys: model.state.keys, now: .now, calendar: .current)
                                     limitSnoozes = task.style.maxSnoozes != nil

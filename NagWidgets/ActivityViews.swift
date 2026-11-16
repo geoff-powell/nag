@@ -8,12 +8,12 @@ struct NagActivityLockScreenView: View {
 
     var body: some View {
         let content = context.state.content
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
+        VStack(alignment: .leading, spacing: Space.s) {
+            HStack(alignment: .firstTextBaseline, spacing: Space.s) {
                 Label(content.title, systemImage: "bell.badge.fill")
                     .font(.headline)
                     .lineLimit(2)
-                Spacer(minLength: 8)
+                Spacer(minLength: Space.s)
                 if !context.isStale {
                     Text(content.dueAt, style: .relative)
                         .font(.subheadline.monospacedDigit())
@@ -38,11 +38,11 @@ struct NagActivityActions: View {
     let content: NagActivityContent
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Space.m) {
             if content.needsKeyScan {
                 Button(intent: ScanProofIntent(nag: NagEntity(activityContent: content))) {
                     Label("Scan", systemImage: "barcode.viewfinder")
-                        .frame(minWidth: 44, minHeight: 44)
+                        .frame(minWidth: Metrics.minTapTarget, minHeight: Metrics.minTapTarget)
                         .contentShape(Rectangle())
                 }
                 .accessibilityLabel("Scan key for \(content.title)")
@@ -50,7 +50,7 @@ struct NagActivityActions: View {
             } else if content.canComplete {
                 Button(intent: CompleteNagFromActivityIntent(nag: NagEntity(activityContent: content))) {
                     Label("Done", systemImage: "checkmark")
-                        .frame(minWidth: 44, minHeight: 44)
+                        .frame(minWidth: Metrics.minTapTarget, minHeight: Metrics.minTapTarget)
                         .contentShape(Rectangle())
                 }
                 .accessibilityLabel("Mark \(content.title) done")
@@ -58,7 +58,7 @@ struct NagActivityActions: View {
             if content.canSnooze {
                 Button(intent: SnoozeNagFromActivityIntent(nag: NagEntity(activityContent: content), length: nil)) {
                     Label("Snooze", systemImage: "clock")
-                        .frame(minWidth: 44, minHeight: 44)
+                        .frame(minWidth: Metrics.minTapTarget, minHeight: Metrics.minTapTarget)
                         .contentShape(Rectangle())
                 }
                 .accessibilityLabel("Snooze \(content.title)")
@@ -74,15 +74,15 @@ struct LockActivityLockScreenView: View {
 
     var body: some View {
         let content = context.state.content
-        VStack(alignment: .leading, spacing: 8) {
-                Label(content.name, systemImage: content.symbol)
-                    .font(.headline)
-                if context.isStale {
-                    Text("Open Nag to refresh")
-                        .foregroundStyle(.secondary)
-                } else {
-                    LockActivityStatus(content: content)
-                }
+        VStack(alignment: .leading, spacing: Space.s) {
+            Label(content.name, systemImage: content.symbol)
+                .font(.headline)
+            if context.isStale {
+                Text("Open Nag to refresh")
+                    .foregroundStyle(.secondary)
+            } else {
+                LockActivityStatus(content: content)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
@@ -95,19 +95,19 @@ struct LockActivityStatus: View {
 
     var body: some View {
         if let openUntil = content.openUntil {
-            HStack(spacing: 4) {
+            HStack(spacing: Space.xs) {
                 Text("Open until")
                 Text(openUntil, style: .timer).monospacedDigit()
             }
         } else if let waitEndsAt = content.waitEndsAt {
-            HStack(spacing: 4) {
+            HStack(spacing: Space.xs) {
                 Text("Wait")
                 Text(waitEndsAt, style: .timer).monospacedDigit()
             }
         } else if content.remaining.isEmpty {
             Text("Lock is on")
         } else {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 ForEach(content.remaining, id: \.self) { Text($0) }
             }
         }

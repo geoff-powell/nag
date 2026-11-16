@@ -19,16 +19,18 @@ public sealed record Reminder
     [JsonRequired] public int SnoozeMinutes { get; set; } = 10;
     [JsonRequired] public int MaxSnoozes { get; set; } = 3;
     [JsonRequired] public int SnoozeCount { get; set; }
-    [JsonRequired] public DateTime? SnoozedUntil { get; set; }
-    [JsonRequired] public DateTime? LastNotified { get; set; }
+    // Instants: durations stay exact across DST changes.
+    [JsonRequired] public DateTimeOffset? SnoozedUntil { get; set; }
+    [JsonRequired] public DateTimeOffset? LastNotified { get; set; }
     [JsonRequired] public bool Finished { get; set; }
 
-    public bool Outstanding(DateTime now) => !Finished && Due <= now;
-    public bool Snoozed(DateTime now) => Outstanding(now) && SnoozedUntil > now;
-    public string Status(DateTime now) => Finished ? "Done" : Snoozed(now) ? "Snoozed" : Outstanding(now) ? "Due" : "Upcoming";
-    public double NotificationInterval(DateTime now)
+    // `now` is an instant; Due and quiet hours compare against its local wall clock.
+    public bool Outstanding(DateTimeOffset now) => !Finished && Due <= now.LocalDateTime;
+    public bool Snoozed(DateTimeOffset now) => Outstanding(now) && SnoozedUntil > now;
+    public string Status(DateTimeOffset now) => Finished ? "Done" : Snoozed(now) ? "Snoozed" : Outstanding(now) ? "Due" : "Upcoming";
+    public double NotificationInterval(DateTimeOffset now)
     {
-        double overdue = Math.Max(0, (now - Due).TotalMinutes);
+        double overdue = Math.Max(0, (now.LocalDateTime - Due).TotalMinutes);
         return Escalation switch
         {
             Escalation.Relentless => Math.Max(1, IntervalMinutes / Math.Pow(2, Math.Min(30, Math.Floor(overdue / 30)))),
@@ -36,16 +38,16 @@ public sealed record Reminder
             _ => IntervalMinutes
         };
     }
-    public string Message(DateTime now) => (now - Due).TotalMinutes switch
+    public string Message(DateTimeOffset now) => (now.LocalDateTime - Due).TotalMinutes switch
     {
         >= 180 => "Still here. Take one small step, then mark it done.",
         >= 60 => "This is overdue. Two minutes is enough to start.",
         >= 15 => "Still waiting. Try the smallest next step.",
         _ => string.IsNullOrWhiteSpace(Notes) ? "It's time. Start with the smallest step." : Notes
     };
-    public bool ShouldNotify(DateTime now, Settings settings) => Outstanding(now) && !Snoozed(now)
+    public bool ShouldNotify(DateTimeOffset now, Settings settings) => Outstanding(now) && !Snoozed(now)
         && !settings.IsQuiet(now) && (LastNotified is null || (now - LastNotified.Value).TotalMinutes >= NotificationInterval(now));
-    public void Snooze(DateTime now)
+    public void Snooze(DateTimeOffset now)
     {
         if (!Outstanding(now) || Snoozed(now) || SnoozeCount >= MaxSnoozes)
             throw new InvalidOperationException("This nag cannot be snoozed right now.");
@@ -53,9 +55,10 @@ public sealed record Reminder
         SnoozedUntil = now.AddMinutes(SnoozeMinutes);
         LastNotified = null;
     }
-    public void Complete(DateTime now)
+    public void Complete(DateTimeOffset instant)
     {
         if (Finished) return;
+        DateTime now = instant.LocalDateTime;
         if (Repeat == Repeat.Once) Finished = true;
         else
         {
@@ -96,9 +99,9 @@ public sealed record AppLock
     [JsonRequired] public List<string> Executables { get; set; } = [];
     [JsonRequired] public bool Enabled { get; set; }
     [JsonRequired] public bool WhileDue { get; set; } = true;
-    [JsonRequired] public DateTime? Until { get; set; }
-    [JsonRequired] public DateTime? EmergencyUntil { get; set; }
-    public bool Active(DateTime now, IEnumerable<Reminder> reminders) => Enabled && !(EmergencyUntil > now)
+    [JsonRequired] public DateTimeOffset? Until { get; set; }
+    [JsonRequired] public DateTimeOffset? EmergencyUntil { get; set; }
+    public bool Active(DateTimeOffset now, IEnumerable<Reminder> reminders) => Enabled && !(EmergencyUntil > now)
         && (WhileDue ? reminders.Any(n => n.Outstanding(now)) : Until > now);
 }
 
@@ -107,9 +110,10 @@ public sealed record Settings
     [JsonRequired] public bool QuietEnabled { get; set; }
     [JsonRequired] public int QuietStartHour { get; set; } = 22;
     [JsonRequired] public int QuietEndHour { get; set; } = 8;
-    public bool IsQuiet(DateTime now) => QuietEnabled && QuietStartHour != QuietEndHour
-        && (QuietStartHour < QuietEndHour ? now.Hour >= QuietStartHour && now.Hour < QuietEndHour
-            : now.Hour >= QuietStartHour || now.Hour < QuietEndHour);
+    public bool IsQuiet(DateTimeOffset now) => IsQuietHour(now.LocalDateTime.Hour);
+    private bool IsQuietHour(int hour) => QuietEnabled && QuietStartHour != QuietEndHour
+        && (QuietStartHour < QuietEndHour ? hour >= QuietStartHour && hour < QuietEndHour
+            : hour >= QuietStartHour || hour < QuietEndHour);
 }
 
 public sealed record State
