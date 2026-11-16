@@ -25,15 +25,16 @@ final class NagPanelController {
 
     func refresh(now: Date) {
         let state = model.state
+        let focus = state.settings.focusFilter
         let visible = state.tasks
             .filter { task in
-                task.isNagging(at: now) || (task.canUndoCompletion(at: now)
+                (task.isNagging(at: now) && focus.allows(task.style)) || (task.canUndoCompletion(at: now)
                     && task.completionUndo.map { now.timeIntervalSince($0.completedAtMoment) < NagUndo.toastDuration } == true)
             }
             .sorted { $0.startAt < $1.startAt }
         let naggingCount = visible.filter { $0.isNagging(at: now) }.count
 
-        guard Self.isEnabled, !visible.isEmpty, !state.settings.quietHours.contains(now, calendar: model.calendar) else {
+        guard Self.isEnabled, !visible.isEmpty, !state.settings.isQuietHoursActive(at: now, calendar: model.calendar) else {
             panel.orderOut(nil)
             collapsedAt = nil
             return

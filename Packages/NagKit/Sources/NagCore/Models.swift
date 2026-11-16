@@ -412,6 +412,12 @@ public enum LockTrigger: String, Codable, Sendable {
     case manual
     case schedule
     case nags
+    case focus
+
+    public init(from decoder: any Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(String.self)
+        self = LockTrigger(rawValue: rawValue) ?? .manual
+    }
 }
 
 public struct LockSession: Codable, Hashable, Sendable {
@@ -459,6 +465,8 @@ public struct LockProfile: Codable, Hashable, Identifiable, Sendable {
     public var status: LockStatus
     /// Start of the last schedule window that switched this lock on.
     public var lastScheduledLockAt: Date?
+    /// Start of the last Focus filter activation that switched this lock on.
+    public var lastFocusLockAt: Date?
     /// After an emergency unlock, due nags don't switch the lock back on until this time.
     public var autoLockPausedUntil: Date?
 
@@ -490,6 +498,7 @@ public struct LockProfile: Codable, Hashable, Identifiable, Sendable {
         self.message = message
         self.status = .off
         self.lastScheduledLockAt = nil
+        self.lastFocusLockAt = nil
         self.autoLockPausedUntil = nil
     }
 }
@@ -544,6 +553,8 @@ public struct AppSettings: Codable, Hashable, Sendable {
     public var screenTimeApproved: Bool
     /// Live Activities are opt-in: off until the user turns them on in Settings.
     public var liveActivitiesEnabled: Bool
+    /// Active Focus filter on this device.
+    public var focusFilter: FocusFilter
 
     public init(
         quietHours: QuietHours = QuietHours(),
@@ -553,7 +564,8 @@ public struct AppSettings: Codable, Hashable, Sendable {
         emergencyUnlocksUsed: [Date] = [],
         hasOnboarded: Bool = false,
         screenTimeApproved: Bool = false,
-        liveActivitiesEnabled: Bool = false
+        liveActivitiesEnabled: Bool = false,
+        focusFilter: FocusFilter = FocusFilter()
     ) {
         self.quietHours = quietHours
         self.quietHoursUpdatedAt = quietHoursUpdatedAt
@@ -563,11 +575,12 @@ public struct AppSettings: Codable, Hashable, Sendable {
         self.hasOnboarded = hasOnboarded
         self.screenTimeApproved = screenTimeApproved
         self.liveActivitiesEnabled = liveActivitiesEnabled
+        self.focusFilter = focusFilter
     }
 
     private enum CodingKeys: String, CodingKey {
         case quietHours, quietHoursUpdatedAt, nagTone, emergencyUnlocksPerMonth, emergencyUnlocksUsed, hasOnboarded, screenTimeApproved
-        case liveActivitiesEnabled
+        case liveActivitiesEnabled, focusFilter
     }
 
     public init(from decoder: any Decoder) throws {
@@ -580,6 +593,7 @@ public struct AppSettings: Codable, Hashable, Sendable {
         hasOnboarded = try c.decodeIfPresent(Bool.self, forKey: .hasOnboarded) ?? false
         screenTimeApproved = try c.decodeIfPresent(Bool.self, forKey: .screenTimeApproved) ?? false
         liveActivitiesEnabled = try c.decodeIfPresent(Bool.self, forKey: .liveActivitiesEnabled) ?? false
+        focusFilter = try c.decodeIfPresent(FocusFilter.self, forKey: .focusFilter) ?? FocusFilter()
     }
 
     public mutating func setQuietHours(_ new: QuietHours, at now: Date) {
