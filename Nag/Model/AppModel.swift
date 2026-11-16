@@ -2,6 +2,7 @@
 import Foundation
 import NagKit
 import Observation
+import UIKit
 @preconcurrency import UserNotifications
 
 /// The app's single source of truth. Views read `state` and call these methods; every change is written
@@ -20,6 +21,9 @@ final class AppModel {
     @ObservationIgnored private var changeObservation: SharedStore.ChangeObservation?
     @ObservationIgnored private var cloudSync: CloudTaskSync?
     @ObservationIgnored private var quietHoursSync: QuietHoursSync?
+    @ObservationIgnored private var buddySharedSync: BuddySharedSync?
+    /// Accountability buddy. `nil` in UI tests, which must never touch iCloud.
+    @ObservationIgnored private(set) var buddy: BuddyController?
     @ObservationIgnored private var syncTask: Task<Void, Never>?
     /// UI tests: no iCloud, and no shields, DeviceActivity schedules or notifications. On a real
     /// iPhone those are shared with the user's real Nag, so a test run must not touch them.
@@ -57,6 +61,17 @@ final class AppModel {
         }
         quietHoursSync = quietHours
         quietHours.start()
+        let buddyShared = BuddySharedSync(store: store) { [weak self] in
+            Task { @MainActor in self?.reload() }
+        }
+        buddySharedSync = buddyShared
+        buddyShared.start()
+        let buddy = BuddyController(model: self)
+        self.buddy = buddy
+        if state.buddy.sharingEnabled {
+            // Re-register each launch so CloudKit's change pushes keep arriving.
+            UIApplication.shared.registerForRemoteNotifications()
+        }
         sync()
     }
 
@@ -64,25 +79,34 @@ final class AppModel {
         reload()
         cloudSync?.reconcile()
         quietHoursSync?.reconcile()
+        buddySharedSync?.reconcile()
         sync()
         Task { await refreshPermissions() }
+        Task { await buddy?.refresh() }
     }
 
     func reload() {
         state = store.load()
+        buddy?.stateChanged(state)
     }
 
     /// Applies a change to the stored state, then syncs everything that depends on it.
     func update(_ change: (inout NagState) -> Void) {
         let previousQuietHours = state.settings.syncedQuietHours
+        let previousShared = state.buddy.shared
         state = store.update { state in
             change(&state)
+            state.pruneDeletedBuddyItems(at: .now)
             return state
         }
         cloudSync?.reconcile()
         if state.settings.syncedQuietHours != previousQuietHours {
             quietHoursSync?.reconcile()
         }
+        if state.buddy.shared != previousShared {
+            buddySharedSync?.reconcile()
+        }
+        buddy?.stateChanged(state)
         sync()
     }
 
