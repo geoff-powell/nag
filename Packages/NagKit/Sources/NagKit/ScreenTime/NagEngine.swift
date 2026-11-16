@@ -81,6 +81,7 @@ public enum NagEngine {
         let plan = planner.plan(
             tasks: state.tasks,
             quietHours: state.settings.quietHours,
+            focusFilter: state.settings.focusFilter,
             tone: state.settings.nagTone,
             now: now
         )

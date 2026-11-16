@@ -117,6 +117,7 @@ final class MacModel {
         let latest = store.load()
         guard latest != state else { return }
         let nagsChanged = latest.tasks != state.tasks
+            || latest.settings.focusFilter != state.settings.focusFilter
         state = latest
         onChange?()
         if nagsChanged {
@@ -153,6 +154,7 @@ final class MacModel {
             let plan = planner.plan(
                 tasks: state.tasks,
                 quietHours: state.settings.quietHours,
+                focusFilter: state.settings.focusFilter,
                 tone: state.settings.nagTone,
                 now: now
             )
@@ -348,6 +350,7 @@ final class MacModel {
                 var updated = profile
                 updated.status = state.profiles[index].status
                 updated.lastScheduledLockAt = state.profiles[index].lastScheduledLockAt
+                updated.lastFocusLockAt = state.profiles[index].lastFocusLockAt
                 updated.autoLockPausedUntil = state.profiles[index].autoLockPausedUntil
                 state.profiles[index] = updated
             } else {
@@ -404,6 +407,24 @@ final class MacModel {
             guard let index = state.profiles.firstIndex(where: { $0.id == id }) else { return }
             change(&state.profiles[index])
         }
+    }
+
+    // MARK: - Focus
+
+    /// Applies the Focus filter macOS sent (or clears it when the Focus ends). The tick that follows
+    /// re-applies blocking and the panel; notifications are re-planned before returning.
+    func applyFocusFilter(lockIDs: Set<UUID>, minimumUrgency: FocusUrgency, quietHours: Bool) async {
+        let calendar = calendar
+        update { state in
+            state.applyFocusFilter(
+                lockIDs: lockIDs,
+                minimumUrgency: minimumUrgency,
+                quietHours: quietHours,
+                now: .now,
+                calendar: calendar
+            )
+        }
+        await waitForNotificationSync()
     }
 
     // MARK: - Settings

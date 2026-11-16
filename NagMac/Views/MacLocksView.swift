@@ -109,6 +109,7 @@ private struct MacLockRow: View {
             : profile.requirements.map { UnlockEvaluator.title(for: $0.kind, state: model.state) }.joined(separator: " + ")]
         if let schedule = profile.schedule { parts.append(schedule.label) }
         if profile.lockWhileNagsDue { parts.append("Locks while nags are due") }
+        if profile.session?.trigger == .focus { parts.append("On for your Focus") }
         return parts.joined(separator: " · ")
     }
 }
