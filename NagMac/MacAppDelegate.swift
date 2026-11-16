@@ -7,7 +7,7 @@ import NagKit
 /// the main window.
 @MainActor
 final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
-    let model = MacModel(store: .shared)
+    let model = MacUITesting.isActive ? MacUITesting.makeModel() : MacModel(store: .shared)
     let mcp = MCPController()
     private lazy var mainWindow = MainWindowController(model: model, mcp: mcp)
     private lazy var shieldPanel = ShieldPanelController()
@@ -18,6 +18,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     override init() {
         super.init()
+        MacUITesting.startReportingUsage()
         // Shortcuts can launch Nag to run an intent, so register before launch finishes.
         let model = model
         AppDependencyManager.shared.add(dependency: model)
@@ -41,6 +42,10 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
         model.openMainWindow = { [weak self] in self?.mainWindow.show() }
         model.onChange = { [weak self] in self?.enforce() }
         model.start()
+        if MacUITesting.isActive {
+            // Tests reach the menu bar and the main window themselves; no MCP server or first-run flow.
+            return
+        }
         mcp.start()
 
         if !model.hasLaunchedBefore {

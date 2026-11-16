@@ -29,6 +29,8 @@ final class MacModel {
     private(set) var state: NagState
     private(set) var notificationStatus: UNAuthorizationStatus = .notDetermined
     private(set) var launchAtLogin = SMAppService.mainApp.status == .enabled
+    /// When the last tick ran. Views that only need to refresh at tick rate, like the menu bar label, read it.
+    private(set) var lastTick = Date.now
     var section: Section = .nags
     var unlockRequest: PresentedID?
     /// A nag from a link, shown in the editor.
@@ -49,8 +51,12 @@ final class MacModel {
 
     static let tickInterval: Duration = .seconds(15)
 
-    init(store: SharedStore) {
+    /// Stays off iCloud and notifications, for UI tests. See `MacUITesting`.
+    let isolated: Bool
+
+    init(store: SharedStore, isolated: Bool = false) {
         self.store = store
+        self.isolated = isolated
         self.state = store.load()
     }
 
@@ -58,6 +64,8 @@ final class MacModel {
         changeObservation = store.observeChanges { [weak self] in
             Task { @MainActor in self?.storeChanged() }
         }
+        startTicking()
+        guard !isolated else { return }
         let cloud = CloudTaskSync(store: store) { [weak self] in
             Task { @MainActor in
                 self?.reload()
@@ -74,14 +82,16 @@ final class MacModel {
         }
         quietHoursSync = quietHours
         quietHours.start()
+        Task { await refreshPermissions() }
+    }
 
+    private func startTicking() {
         tickTask = Task { [weak self] in
             while !Task.isCancelled {
                 self?.tick()
                 try? await Task.sleep(for: Self.tickInterval)
             }
         }
-        Task { await refreshPermissions() }
     }
 
     /// Brings locks up to date, then re-enforces. Notifications are re-planned at least once a minute
@@ -93,10 +103,11 @@ final class MacModel {
             return state
         }
         let changed = updated != state
-        state = updated
+        if changed { state = updated }
+        lastTick = now
         onChange?()
 
-        for profile in autoUnlocked {
+        for profile in autoUnlocked where !isolated {
             Task {
                 await NotificationSync.alert(title: "\(profile.name) unlocked", body: Self.unlockedMessage(for: profile), profileID: profile.id)
             }
@@ -142,6 +153,7 @@ final class MacModel {
     /// Re-plans notifications, after any earlier sync finishes so they never overlap.
     func syncNotifications() {
         lastNotificationSync = .now
+        guard !isolated else { return }
         let previous = notificationTask
         let store = store
         let calendar = calendar

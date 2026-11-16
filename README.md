@@ -56,6 +56,18 @@ xcodebuild test -scheme Nag -destination 'platform=iOS Simulator,name=iPhone 17 
 To review animations, `scripts/record-ui.sh` records each UI test as an MP4 (60 fps, for frame-by-frame
 review) and a GIF in `build/ui-recordings`. Pass test names to record only those.
 
+`NagMacUITests` drives the Mac menu bar app the same way, with its own seeded store (see
+`NagMac/MacUITesting.swift`): the menu bar extra, quick add, the main window, each section and the
+nag editor. After each step it leaves Nag idle for a few seconds and fails if Nag is using more than
+half a core or 500 MB, or if its main thread has stopped responding. That catches update loops like
+the one that once hung Nag at launch.
+
+```sh
+xcodebuild test -scheme NagMac -destination 'platform=macOS' -only-testing:NagMacUITests
+```
+
+The first run asks for Accessibility access for the test runner.
+
 ## Releasing
 
 ### iPhone: TestFlight
@@ -107,7 +119,7 @@ Set `NAG_GITHUB_USER=geoff-powell` if more than one GitHub account is signed in 
 
 Three workflows:
 
-- **Tests** (`.github/workflows/tests.yml`) runs the unit tests and builds both apps on every push to
+- **Tests** (`.github/workflows/tests.yml`) runs the unit tests and the Mac UI tests, and builds both apps, on every push to
   `main` and every pull request.
 - **Deploy** (`.github/workflows/deploy.yml`) uploads the iPhone app to TestFlight, notarizes the
   Mac app, and publishes one GitHub release for the deploy. The release is tagged
