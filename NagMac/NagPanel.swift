@@ -71,7 +71,7 @@ final class NagPanelController {
         guard let screen = NSScreen.main else { return }
         let visible = screen.visibleFrame
         let size = panel.frame.size
-        panel.setFrameOrigin(NSPoint(x: visible.maxX - size.width - 16, y: visible.maxY - size.height - 16))
+        panel.setFrameOrigin(NSPoint(x: visible.maxX - size.width - Space.l, y: visible.maxY - size.height - Space.l))
     }
 }
 
@@ -95,7 +95,7 @@ private struct NagPanelView: View {
                     Label(pillTitle, systemImage: "bell.badge.fill")
                         .font(.callout.weight(.semibold))
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
+                        .padding(.vertical, Space.s)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.white)
@@ -107,8 +107,8 @@ private struct NagPanelView: View {
     }
 
     private var expanded: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
+        VStack(alignment: .leading, spacing: Space.s) {
+            HStack(spacing: Space.s) {
                 Label(naggingCount > 0 ? "Still waiting on you" : "Marked done", systemImage: "bell.badge.fill")
                     .font(.headline)
                     .foregroundStyle(.orange)
@@ -121,14 +121,16 @@ private struct NagPanelView: View {
             .buttonStyle(.borderless)
 
             ForEach(tasks.prefix(5)) { task in
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(task.title)
-                        .font(.body.weight(.semibold))
-                        .lineLimit(2)
-                    Text(subtitle(for: task))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    HStack {
+                VStack(alignment: .leading, spacing: Space.s) {
+                    VStack(alignment: .leading, spacing: Space.xxs) {
+                        Text(task.title)
+                            .font(.body.weight(.semibold))
+                            .lineLimit(2)
+                        Text(subtitle(for: task))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack(spacing: Space.s) {
                         if task.canUndoCompletion(at: now) {
                             Button("Undo") { onUndo(task.id) }
                                 .buttonStyle(.borderedProminent)
@@ -153,17 +155,17 @@ private struct NagPanelView: View {
                     }
                     .controlSize(.small)
                 }
-                .padding(10)
+                .padding(Space.m)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.background.opacity(0.6), in: RoundedRectangle(cornerRadius: 10))
+                .background(.background.opacity(0.6), in: RoundedRectangle(cornerRadius: Radius.card))
             }
             if tasks.count > 5 {
                 Text("and \(tasks.count - 5) more").font(.caption).foregroundStyle(.secondary)
             }
         }
-        .padding(14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.orange.opacity(0.6), lineWidth: 1.5))
+        .padding(Space.m)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Radius.panel))
+        .overlay(RoundedRectangle(cornerRadius: Radius.panel).strokeBorder(.orange.opacity(0.5), lineWidth: 1))
     }
 
     private func subtitle(for task: NagTask) -> String {

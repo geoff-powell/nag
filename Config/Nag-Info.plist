@@ -15,6 +15,8 @@
 	</array>
 	<key>NagAppGroup</key>
 	<string>$(APP_GROUP_ID)</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Nag uses the camera to scan the QR code or barcode you picked as an unlock key.</string>
 	<key>NSMotionUsageDescription</key>

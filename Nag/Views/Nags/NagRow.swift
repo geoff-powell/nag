@@ -13,7 +13,7 @@ struct NagRow: View {
     @State private var checkBounces = 0
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Space.m) {
             Button(action: tapCheck) {
                 Image(systemName: checkSymbol)
                     .font(.title2)
@@ -28,7 +28,7 @@ struct NagRow: View {
             .accessibilityIdentifier("complete.\(task.title)")
             .accessibilityValue(checkState)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(task.title)
                     .font(.body.weight(task.isOutstanding(at: now) ? .semibold : .regular))
                     .strikethrough(task.isFinished)
@@ -58,7 +58,7 @@ struct NagRow: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Space.xs)
     }
 
     /// Fills the check in place first, then completes, so the row only moves once the tap has landed.

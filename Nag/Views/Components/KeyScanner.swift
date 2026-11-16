@@ -12,7 +12,7 @@ struct KeyScanner: View {
     @State private var cameraAllowed: Bool?
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: Space.m) {
             switch key.kind {
             case .nfc:
                 Button {
@@ -34,8 +34,8 @@ struct KeyScanner: View {
                     CodeScannerView { payload in
                         accept(KeyFingerprint.code(payload))
                     }
-                    .frame(height: 260)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .frame(height: Metrics.cameraPreviewHeight)
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.media))
                 } else if cameraAllowed == false {
                     Text("Nag needs camera access to scan codes. Turn it on in Settings.")
                         .foregroundStyle(.secondary)

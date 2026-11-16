@@ -544,6 +544,8 @@ public struct AppSettings: Codable, Hashable, Sendable {
     public var screenTimeApproved: Bool
     /// iPhone: ease off while a Mac is in use. Mac: take over while in use. Each device decides for itself.
     public var deviceHandoff: Bool
+    /// Live Activities are opt-in: off until the user turns them on in Settings.
+    public var liveActivitiesEnabled: Bool
 
     public init(
         quietHours: QuietHours = QuietHours(),
@@ -553,7 +555,8 @@ public struct AppSettings: Codable, Hashable, Sendable {
         emergencyUnlocksUsed: [Date] = [],
         hasOnboarded: Bool = false,
         screenTimeApproved: Bool = false,
-        deviceHandoff: Bool = true
+        deviceHandoff: Bool = true,
+        liveActivitiesEnabled: Bool = false
     ) {
         self.quietHours = quietHours
         self.quietHoursUpdatedAt = quietHoursUpdatedAt
@@ -563,11 +566,13 @@ public struct AppSettings: Codable, Hashable, Sendable {
         self.hasOnboarded = hasOnboarded
         self.screenTimeApproved = screenTimeApproved
         self.deviceHandoff = deviceHandoff
+        self.liveActivitiesEnabled = liveActivitiesEnabled
     }
 
     private enum CodingKeys: String, CodingKey {
         case quietHours, quietHoursUpdatedAt, nagTone, emergencyUnlocksPerMonth, emergencyUnlocksUsed, hasOnboarded, screenTimeApproved
         case deviceHandoff
+        case liveActivitiesEnabled
     }
 
     public init(from decoder: any Decoder) throws {
@@ -580,6 +585,7 @@ public struct AppSettings: Codable, Hashable, Sendable {
         hasOnboarded = try c.decodeIfPresent(Bool.self, forKey: .hasOnboarded) ?? false
         screenTimeApproved = try c.decodeIfPresent(Bool.self, forKey: .screenTimeApproved) ?? false
         deviceHandoff = try c.decodeIfPresent(Bool.self, forKey: .deviceHandoff) ?? true
+        liveActivitiesEnabled = try c.decodeIfPresent(Bool.self, forKey: .liveActivitiesEnabled) ?? false
     }
 
     public mutating func setQuietHours(_ new: QuietHours, at now: Date) {

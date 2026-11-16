@@ -69,7 +69,7 @@ private struct ScreenTimeBanner: View {
     @State private var error: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Space.s) {
             Label("Screen Time access needed", systemImage: "hourglass")
                 .font(.headline)
             Text("Locks can't block apps until you allow it. Screen Time only works on a real iPhone, not the simulator.")
@@ -83,7 +83,7 @@ private struct ScreenTimeBanner: View {
                 Text(error).font(.footnote).foregroundStyle(.red)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Space.xs)
     }
 }
 
@@ -96,13 +96,13 @@ private struct LockRow: View {
     @Environment(Router.self) private var router
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: Space.s) {
+            HStack(spacing: Space.m) {
                 Image(systemName: profile.symbol)
                     .font(.title2)
                     .foregroundStyle(profile.isShielding(at: now) ? .orange : .secondary)
-                    .frame(width: 34)
-                VStack(alignment: .leading, spacing: 2) {
+                    .frame(width: Metrics.iconColumn)
+                VStack(alignment: .leading, spacing: Space.xxs) {
                     Text(profile.name).font(.headline)
                     Text(profile.selectionSummary.label)
                         .font(.caption)
@@ -116,7 +116,7 @@ private struct LockRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            HStack {
+            HStack(spacing: Space.s) {
                 switch profile.status {
                 case .off:
                     Button("Lock now", systemImage: "lock.fill") { model.lockNow(profile.id) }
@@ -134,7 +134,7 @@ private struct LockRow: View {
             }
             .controlSize(.small)
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, Space.xs)
     }
 
     private var detail: String {
@@ -147,36 +147,5 @@ private struct LockRow: View {
         if let schedule = profile.schedule { parts.append(schedule.label) }
         if profile.lockWhileNagsDue { parts.append("Locks while nags are due") }
         return parts.joined(separator: "\n")
-    }
-}
-
-struct StatusPill: View {
-    let profile: LockProfile
-    let now: Date
-
-    var body: some View {
-        Text(text)
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(color.opacity(0.15), in: Capsule())
-            .foregroundStyle(color)
-    }
-
-    private var text: String {
-        switch profile.status {
-        case .off: "Off"
-        case .locked: "Locked"
-        case .unlocked(_, let until):
-            until > now ? "Open until \(until.formatted(date: .omitted, time: .shortened))" : "Locking…"
-        }
-    }
-
-    private var color: Color {
-        switch profile.status {
-        case .off: .secondary
-        case .locked: .orange
-        case .unlocked: .green
-        }
     }
 }

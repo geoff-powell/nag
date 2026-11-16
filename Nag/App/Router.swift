@@ -84,6 +84,8 @@ final class Router {
             case .nags:
                 resetPresentation()
                 tab = .nags
+            case .locks:
+                tab = .locks
             case .nag(let id):
                 guard model.state.task(id) != nil else { throw LinkError.missingNag }
                 showTask(id)

@@ -31,7 +31,7 @@ struct TaskProofSheet: View {
     @ViewBuilder
     private func content(_ task: NagTask) -> some View {
         if let key = model.proofKey(for: task) {
-            VStack(spacing: 20) {
+            VStack(spacing: Space.xl) {
                 Text(task.title)
                     .font(.title2.bold())
                     .multilineTextAlignment(.center)
@@ -49,10 +49,10 @@ struct TaskProofSheet: View {
                 }
                 Spacer()
             }
-            .padding()
+            .padding(Space.l)
         } else {
             // The key was removed: fall back to a plain Done.
-            VStack(spacing: 16) {
+            VStack(spacing: Space.xl) {
                 Text(task.title).font(.title2.bold())
                 Text("Its key was removed, so tapping Done is enough.")
                     .foregroundStyle(.secondary)
@@ -62,7 +62,7 @@ struct TaskProofSheet: View {
                 }
                 .buttonStyle(.borderedProminent)
             }
-            .padding()
+            .padding(Space.l)
         }
     }
 }

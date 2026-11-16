@@ -241,6 +241,7 @@ import Testing
             ("nag://new-nag", .newNag),
             ("nag://newnag", .newNag),
             ("NAG://Nags", .nags),
+            ("nag://locks", .locks),
             ("nag://nag?id=\(id.uuidString)", .nag(id)),
             ("nag://scan?id=\(id.uuidString)", .scan(taskID: id)),
             ("nag://unlock?id=\(id.uuidString)", .unlock(profileID: id)),
@@ -274,6 +275,7 @@ import Testing
         let routes: [NagRoute] = [
             .newNag,
             .nags,
+            .locks,
             .nag(id),
             .scan(taskID: id),
             .unlock(profileID: id),

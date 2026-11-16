@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var screenTimeError: String?
     @State private var showVersion = false
     @State private var titleScrolledAway = false
+    @State private var systemLiveActivitiesEnabled = true
 
     var body: some View {
         NavigationStack {
@@ -62,6 +63,16 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Live Activity", isOn: liveActivitiesBinding)
+                } footer: {
+                    if systemLiveActivitiesEnabled {
+                        Text("Keeps your oldest overdue nag, and any lock that's on, on the Lock Screen and in the Dynamic Island. Activities end after 8 hours.")
+                    } else {
+                        Text("Live Activities are disabled for Nag. Enable them in iOS Settings to use this feature.")
+                    }
+                }
+
+                Section {
                     Stepper(
                         "Emergency unlocks: \(model.state.settings.emergencyUnlocksPerMonth) a month",
                         value: settingBinding(\.emergencyUnlocksPerMonth),
@@ -103,13 +114,16 @@ struct SettingsView: View {
             } action: { _, scrolledAway in
                 withAnimation(.easeInOut(duration: 0.2)) { titleScrolledAway = scrolledAway }
             }
-            .task { await model.refreshPermissions() }
+            .task {
+                await model.refreshPermissions()
+                systemLiveActivitiesEnabled = LiveActivities.areEnabled
+            }
         }
     }
 
     /// Looks like a large navigation title. Long-press it to show the app version underneath.
     private var title: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Space.xxs) {
             Text("Settings")
                 .font(.largeTitle.bold())
                 .foregroundStyle(Color.primary)
@@ -157,6 +171,15 @@ struct SettingsView: View {
         Binding(
             get: { model.state.settings[keyPath: keyPath] },
             set: { value in model.updateSettings { $0[keyPath: keyPath] = value } }
+        )
+    }
+
+    private var liveActivitiesBinding: Binding<Bool> {
+        Binding(
+            get: { model.state.settings.liveActivitiesEnabled },
+            set: { enabled in
+                model.updateSettings { $0.liveActivitiesEnabled = enabled }
+            }
         )
     }
 

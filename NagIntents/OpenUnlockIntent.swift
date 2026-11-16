@@ -9,6 +9,12 @@ struct OpenUnlockIntent: AppIntent {
 
     @Parameter(title: "Lock", requestValueDialog: "Which lock do you want to unlock?") var lock: LockEntity
 
+    init() {}
+
+    init(lock: LockEntity) {
+        self.lock = lock
+    }
+
     static var parameterSummary: some ParameterSummary {
         Summary("Open unlock steps for \(\.$lock)")
     }
