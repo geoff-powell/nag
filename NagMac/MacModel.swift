@@ -22,6 +22,7 @@ final class MacModel {
     enum Section: Hashable {
         case nags
         case locks
+        case review
         case settings
     }
 
@@ -310,6 +311,11 @@ final class MacModel {
         reload()
         start(id)
         await waitForNotificationSync()
+    }
+
+    /// What got done on this device, for the weekly review. Read on demand: it isn't part of `state`.
+    func loadHistory() -> CompletionHistory {
+        store.loadHistory()
     }
 
     func clearFinished() {
