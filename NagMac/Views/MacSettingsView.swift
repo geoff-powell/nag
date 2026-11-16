@@ -47,6 +47,8 @@ struct MacSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            MacPlacesSection()
+
             Section("Quiet hours") {
                 Toggle("Quiet hours", isOn: quietHoursBinding(\.enabled))
                 if model.state.settings.quietHours.enabled {

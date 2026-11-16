@@ -155,7 +155,8 @@ private struct MacNagRow: View {
     }
 
     private var done: Bool {
-        task.isFinished || task.isSatisfied(at: now, calendar: model.calendar)
+        if task.isAwaitingPlace && task.lastCompletedAt == nil { return false }
+        return task.isFinished || task.isSatisfied(at: now, calendar: model.calendar)
     }
 
     private var status: String {
@@ -172,6 +173,10 @@ private struct MacNagRow: View {
             let left = task.snoozesLeft.map { " · \($0) snooze\($0 == 1 ? "" : "s") left" } ?? ""
             return (overdue < 60 ? "Due now" : "Overdue \(NagFormat.duration(overdue))") + left
         }
+        if task.isAwaitingPlace, let trigger = task.placeTrigger {
+            let place = model.state.placeName(trigger.place)
+            return task.lastCompletedAt == nil ? trigger.event.label(place) : "Done · again \(trigger.event.label(place).lowercased())"
+        }
         if done { return "Done today · next \(task.startAt.formatted(.relative(presentation: .named)))" }
         return "Starts \(task.startAt.formatted(.relative(presentation: .named)))"
     }
@@ -185,6 +190,7 @@ struct MacTaskEditor: View {
     @State private var task: NagTask
     @State private var startNow: Bool
     @State private var limitSnoozes: Bool
+    @State private var atPlace: Bool
 
     init(task: NagTask?) {
         self.init(task: task ?? NagTask(title: ""), original: task, startNow: task == nil)
@@ -201,6 +207,7 @@ struct MacTaskEditor: View {
         _task = State(initialValue: task)
         _startNow = State(initialValue: startNow)
         _limitSnoozes = State(initialValue: task.style.maxSnoozes != nil)
+        _atPlace = State(initialValue: task.placeTrigger != nil)
     }
 
     private var isCustom: Bool { task.repeatRule == .custom }
@@ -243,29 +250,19 @@ struct MacTaskEditor: View {
                         }
                     }
                 }
-                Section("When") {
-                    if !isCustom {
-                        if isNew { Toggle("Start nagging now", isOn: $startNow) }
-                        if !startNow || !isNew {
-                            DatePicker("Starts", selection: $task.startAt)
-                        }
+                if !model.state.places.isEmpty || task.placeTrigger != nil {
+                    Picker("Start", selection: placeModeBinding) {
+                        Text("At a time").tag(false)
+                        Text("At a place").tag(true)
                     }
-                    Picker("Repeat", selection: $task.repeatRule) {
-                        ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag($0) }
-                    }
-                    if task.repeatRule == .everyNDays {
-                        Stepper("Every \(task.repeatEvery) days", value: $task.repeatEvery, in: 1...365)
-                    }
-                    if task.repeatRule == .monthly {
-                        Picker("On day", selection: $task.monthDay) {
-                            ForEach(1...31, id: \.self) { Text("\($0)").tag($0) }
-                        }
-                        Text("Months without that day use their last day.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    .pickerStyle(.segmented)
                 }
-                if isCustom {
+                if atPlace {
+                    placeSection
+                } else {
+                    whenSection
+                }
+                if isCustom && !atPlace {
                     timesSection
                 }
                 Section {
@@ -322,7 +319,15 @@ struct MacTaskEditor: View {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Save") {
-                    if isNew && startNow && !isCustom { task.startAt = .now }
+                    if atPlace, task.placeTrigger != nil {
+                        task.repeatRule = .never
+                        // A new or changed trigger waits for the next visit. A nag that's already due keeps nagging.
+                        if original?.placeTrigger != task.placeTrigger || original?.isAwaitingPlace != false {
+                            task.waitForPlace()
+                        }
+                    } else if isNew && startNow && !isCustom {
+                        task.startAt = .now
+                    }
                     task.alignStartToSchedule(previous: original, now: .now, calendar: model.calendar)
                     if !limitSnoozes { task.style.maxSnoozes = nil }
                     model.saveTask(task)
@@ -338,6 +343,88 @@ struct MacTaskEditor: View {
             if rule == .custom, task.times.isEmpty {
                 task.times = [NagTime(minute: minuteOfDay(task.startAt))]
             }
+        }
+    }
+
+    private var whenSection: some View {
+        Section("When") {
+            if !isCustom {
+                if isNew { Toggle("Start nagging now", isOn: $startNow) }
+                if !startNow || !isNew {
+                    DatePicker("Starts", selection: $task.startAt)
+                }
+            }
+            Picker("Repeat", selection: $task.repeatRule) {
+                ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag($0) }
+            }
+            if task.repeatRule == .everyNDays {
+                Stepper("Every \(task.repeatEvery) days", value: $task.repeatEvery, in: 1...365)
+            }
+            if task.repeatRule == .monthly {
+                Picker("On day", selection: $task.monthDay) {
+                    ForEach(1...31, id: \.self) { Text("\($0)").tag($0) }
+                }
+                Text("Months without that day use their last day.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var placeModeBinding: Binding<Bool> {
+        Binding(
+            get: { atPlace },
+            set: { on in
+                atPlace = on
+                if on {
+                    task.placeTrigger = original?.placeTrigger
+                        ?? model.state.places.first.map { PlaceTrigger(place: $0.ref) }
+                } else {
+                    task.placeTrigger = nil
+                    if task.startAt >= PlaceTrigger.waitingThreshold {
+                        task.startAt = .now
+                        startNow = isNew
+                    }
+                }
+            }
+        )
+    }
+
+    private var placeSection: some View {
+        Section {
+            Picker("Place", selection: Binding(
+                get: { task.placeTrigger?.place.id },
+                set: { id in
+                    if let id, let place = model.state.place(id) { task.placeTrigger?.place = place.ref }
+                }
+            )) {
+                if let ref = task.placeTrigger?.place, model.state.place(ref.id) == nil {
+                    Text(model.state.placeName(ref)).tag(UUID?.some(ref.id))
+                }
+                ForEach(model.state.places) { Text($0.name).tag(UUID?.some($0.id)) }
+            }
+            Picker("Nag me", selection: Binding(
+                get: { task.placeTrigger?.event ?? .arrive },
+                set: { task.placeTrigger?.event = $0 }
+            )) {
+                Text("When I arrive").tag(PlaceEvent.arrive)
+                Text("When I leave").tag(PlaceEvent.leave)
+            }
+            Toggle("Every time", isOn: Binding(
+                get: { task.placeTrigger?.repeats ?? true },
+                set: { task.placeTrigger?.repeats = $0 }
+            ))
+        } header: {
+            Text("Where")
+        } footer: {
+            Group {
+                if let ref = task.placeTrigger?.place, model.state.resolvedPlace(ref) == nil {
+                    Text("This place was saved on another device, so it won't start on this Mac. Pick one of yours, or link it in Settings.")
+                } else {
+                    Text("The Mac only notices while Nag is running. Your iPhone notices even with Nag closed.")
+                }
+            }
+            .foregroundStyle(.secondary)
         }
     }
 

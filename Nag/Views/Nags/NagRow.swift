@@ -77,11 +77,17 @@ struct NagRow: View {
     }
 
     private var isDone: Bool {
-        checking || task.isFinished || task.isSatisfied(at: now, calendar: model.calendar)
+        checking || isDoneForNow
+    }
+
+    /// A place nag that's never been done is waiting, not done.
+    private var isDoneForNow: Bool {
+        if task.isAwaitingPlace && task.lastCompletedAt == nil { return false }
+        return task.isFinished || task.isSatisfied(at: now, calendar: model.calendar)
     }
 
     private var checkState: String {
-        if task.isFinished || task.isSatisfied(at: now, calendar: model.calendar) { return "done" }
+        if isDoneForNow { return "done" }
         if task.isSnoozed(at: now) { return "snoozed" }
         return task.isOutstanding(at: now) ? "due" : "upcoming"
     }
@@ -112,6 +118,10 @@ struct NagRow: View {
             let snoozes = task.snoozesLeft.map { $0 == 0 ? " · no snoozes left" : " · \($0) snooze\($0 == 1 ? "" : "s") left" } ?? ""
             return (overdue < 60 ? "Due now" : "Overdue \(NagFormat.duration(overdue))") + snoozes
         }
+        if task.isAwaitingPlace, let trigger = task.placeTrigger {
+            let place = model.state.placeName(trigger.place)
+            return task.lastCompletedAt == nil ? trigger.event.label(place) : "Done · again \(trigger.event.label(place).lowercased())"
+        }
         if !task.isFinished, task.isSatisfied(at: now, calendar: model.calendar) {
             return "Done today · next \(task.startAt.formatted(.relative(presentation: .named)))"
         }
@@ -121,6 +131,10 @@ struct NagRow: View {
     private var tags: Text {
         var parts: [Text] = []
         if task.isRepeating { parts.append(Text("\(Image(systemName: "repeat")) \(task.repeatLabel)")) }
+        if let trigger = task.placeTrigger {
+            let label = trigger.event.shortLabel(model.state.placeName(trigger.place))
+            parts.append(Text("\(Image(systemName: trigger.repeats ? "mappin.and.ellipse" : "mappin")) \(label)"))
+        }
         if needsScan { parts.append(Text("\(Image(systemName: "wave.3.right")) Scan to finish")) }
         if let source = task.source { parts.append(Text("\(Image(systemName: "arrow.down.app")) \(source)")) }
         return parts.dropFirst().reduce(parts.first ?? Text("")) { Text("\($0)   \($1)") }
@@ -129,6 +143,7 @@ struct NagRow: View {
     private var statusSymbol: String {
         if task.isSnoozed(at: now) { return "zzz" }
         if task.isStarted(at: now) { return "play.circle" }
+        if task.isAwaitingPlace { return "mappin.and.ellipse" }
         return task.isOutstanding(at: now) ? "bell.fill" : "clock"
     }
 

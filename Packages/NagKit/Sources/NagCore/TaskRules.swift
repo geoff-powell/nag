@@ -120,6 +120,7 @@ extension NagTask {
             proof: proof,
             source: source,
             link: link,
+            placeTrigger: placeTrigger,
             now: now
         )
     }
@@ -209,12 +210,15 @@ extension NagTask {
 
     /// Counts toward an unlock. One-off nags must be done; repeating nags must have nothing left today.
     public func isSatisfied(at now: Date, calendar: Calendar) -> Bool {
-        isRepeating ? startAt >= calendar.endOfDay(for: now) : completedAt != nil
+        if isRepeating { return startAt >= calendar.endOfDay(for: now) }
+        // A repeating place nag waiting for its next visit has nothing left to do.
+        return completedAt != nil || (repeatsAtPlace && isAwaitingPlace)
     }
 
     /// Done is available: one-off nags until finished, repeating nags for today's or an overdue occurrence.
     public func canComplete(at now: Date, calendar: Calendar) -> Bool {
-        isRepeating ? startAt < calendar.endOfDay(for: now) : completedAt == nil
+        if isRepeating { return startAt < calendar.endOfDay(for: now) }
+        return completedAt == nil && !(repeatsAtPlace && isAwaitingPlace)
     }
 
     public var snoozesLeft: Int? {
@@ -245,6 +249,9 @@ extension NagTask {
             let base = max(now, startAt)
             startAt = occurrence(after: base, calendar: calendar)
                 ?? base.addingTimeInterval(86_400)
+        } else if repeatsAtPlace {
+            // Waits for the next arrival (or departure) instead of finishing.
+            waitForPlace()
         } else {
             completedAt = now
         }

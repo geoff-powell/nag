@@ -63,6 +63,12 @@ public enum TaskMerge {
             newer.completionUndo = undoneCopy.completionUndo
         } else if let olderDone = older.lastCompletedAt,
            olderDone > (newer.lastCompletedAt ?? .distantPast),
+           olderDone > undone,
+           newer.wasRestartedAtPlace(after: olderDone) {
+            // The newer copy started a new occurrence on arriving after that completion. Keep it.
+            newer.lastCompletedAt = olderDone
+        } else if let olderDone = older.lastCompletedAt,
+           olderDone > (newer.lastCompletedAt ?? .distantPast),
            olderDone > undone {
             newer.lastCompletedAt = olderDone
             newer.completedAt = older.completedAt ?? newer.completedAt
@@ -72,11 +78,22 @@ public enum TaskMerge {
             newer.startedAt = older.startedAt
             newer.completionUndo = older.completionUndo
         }
+        // Place triggers merge on their own clock, so a copy saved by a build that drops them never wins.
+        let triggerCopy = (a.placeTriggerChangedAt ?? .distantPast) >= (b.placeTriggerChangedAt ?? .distantPast) ? a : b
+        newer.placeTrigger = triggerCopy.placeTrigger
+        newer.placeTriggerChangedAt = triggerCopy.placeTriggerChangedAt
         return newer
     }
 
     public static func canonicalOrder(_ a: NagTask, _ b: NagTask) -> Bool {
         (a.createdAt, a.id.uuidString) < (b.createdAt, b.id.uuidString)
+    }
+}
+
+extension NagTask {
+    /// A place nag whose current occurrence started (on arrival or departure) after `date`.
+    func wasRestartedAtPlace(after date: Date) -> Bool {
+        placeTrigger != nil && completedAt == nil && startAt > date && startAt < PlaceTrigger.waitingThreshold
     }
 }
 
