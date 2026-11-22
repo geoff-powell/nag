@@ -551,7 +551,7 @@ public struct AppSettings: Codable, Hashable, Sendable {
     public var hasOnboarded: Bool
     /// Screen Time access was granted, so DeviceActivity can wake Nag in the background (iOS).
     public var screenTimeApproved: Bool
-    /// Live Activities are opt-in: off until the user turns them on in Settings.
+    /// Whether eligible nags and locks appear as Live Activities.
     public var liveActivitiesEnabled: Bool
     /// Active Focus filter on this device.
     public var focusFilter: FocusFilter
@@ -564,7 +564,7 @@ public struct AppSettings: Codable, Hashable, Sendable {
         emergencyUnlocksUsed: [Date] = [],
         hasOnboarded: Bool = false,
         screenTimeApproved: Bool = false,
-        liveActivitiesEnabled: Bool = false,
+        liveActivitiesEnabled: Bool = true,
         focusFilter: FocusFilter = FocusFilter()
     ) {
         self.quietHours = quietHours
