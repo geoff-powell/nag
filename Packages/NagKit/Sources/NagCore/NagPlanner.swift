@@ -62,6 +62,18 @@ extension QuietHours {
     }
 }
 
+extension NagTask {
+    /// One alarm per occurrence, with a new alarm after a snooze. Started nags use normal check-ins.
+    public func alarmDate(quietHours: QuietHours, focusFilter: FocusFilter, calendar: Calendar) -> Date? {
+        guard style.alarmMode != .off, !focusFilter.quietHours, focusFilter.allows(style),
+              let nagStart, workingUntil() == nil else { return nil }
+        let date = style.alarmMode == .atTopTier
+            ? max(nagStart, startAt.addingTimeInterval(NagMessages.tierStarts.last ?? 0))
+            : nagStart
+        return quietHours.nextAllowed(after: date, calendar: calendar)
+    }
+}
+
 /// A notification the platform layer should have pending.
 public struct PlannedNotification: Hashable, Sendable {
     public enum Trigger: Hashable, Sendable {

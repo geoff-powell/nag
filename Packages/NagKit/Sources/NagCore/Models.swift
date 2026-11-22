@@ -78,6 +78,12 @@ public enum Escalation: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum NagAlarmMode: String, Codable, Hashable, Sendable {
+    case off
+    case atStart
+    case atTopTier
+}
+
 public struct NagStyle: Codable, Hashable, Sendable {
     public var intervalMinutes: Int
     public var escalation: Escalation
@@ -85,6 +91,7 @@ public struct NagStyle: Codable, Hashable, Sendable {
     /// `nil` allows unlimited snoozes.
     public var maxSnoozes: Int?
     /// Deliver nags as Time Sensitive so they can break through Focus.
+    public var alarmMode: NagAlarmMode
     public var breakThroughFocus: Bool
     /// How long a nag stays quiet after it is started.
     public var workMinutes: Int
@@ -97,6 +104,7 @@ public struct NagStyle: Codable, Hashable, Sendable {
         snoozeMinutes: Int = 10,
         maxSnoozes: Int? = 3,
         breakThroughFocus: Bool = true,
+        alarmMode: NagAlarmMode = .off,
         workMinutes: Int = 30,
         tone: NagTone? = nil
     ) {
@@ -105,12 +113,13 @@ public struct NagStyle: Codable, Hashable, Sendable {
         self.snoozeMinutes = snoozeMinutes
         self.maxSnoozes = maxSnoozes
         self.breakThroughFocus = breakThroughFocus
+        self.alarmMode = alarmMode
         self.workMinutes = workMinutes
         self.tone = tone
     }
 
     private enum CodingKeys: String, CodingKey {
-        case intervalMinutes, escalation, snoozeMinutes, maxSnoozes, breakThroughFocus, workMinutes, tone
+        case intervalMinutes, escalation, snoozeMinutes, maxSnoozes, breakThroughFocus, workMinutes, tone, alarmMode
     }
 
     /// Every field has its original default so styles saved by older versions still load.
@@ -120,6 +129,7 @@ public struct NagStyle: Codable, Hashable, Sendable {
         escalation = try c.decodeIfPresent(Escalation.self, forKey: .escalation) ?? .gentle
         snoozeMinutes = try c.decodeIfPresent(Int.self, forKey: .snoozeMinutes) ?? 10
         maxSnoozes = try c.decodeIfPresent(Int.self, forKey: .maxSnoozes)
+        alarmMode = try c.decodeIfPresent(NagAlarmMode.self, forKey: .alarmMode) ?? .off
         breakThroughFocus = try c.decodeIfPresent(Bool.self, forKey: .breakThroughFocus) ?? true
         workMinutes = min(max(try c.decodeIfPresent(Int.self, forKey: .workMinutes) ?? 30, 1), 1440)
         tone = (try? c.decodeIfPresent(String.self, forKey: .tone))
@@ -132,6 +142,7 @@ public struct NagStyle: Codable, Hashable, Sendable {
         try c.encode(escalation, forKey: .escalation)
         try c.encode(snoozeMinutes, forKey: .snoozeMinutes)
         try c.encodeIfPresent(maxSnoozes, forKey: .maxSnoozes)
+        if alarmMode != .off { try c.encode(alarmMode, forKey: .alarmMode) }
         try c.encode(breakThroughFocus, forKey: .breakThroughFocus)
         try c.encode(workMinutes, forKey: .workMinutes)
         try c.encodeIfPresent(tone?.rawValue, forKey: .tone)
