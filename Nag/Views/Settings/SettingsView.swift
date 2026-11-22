@@ -66,7 +66,7 @@ struct SettingsView: View {
                     Toggle("Live Activity", isOn: liveActivitiesBinding)
                 } footer: {
                     if systemLiveActivitiesEnabled {
-                        Text("Keeps your oldest overdue nag, and any lock that's on, on the Lock Screen and in the Dynamic Island. Activities end after 8 hours.")
+                        Text("Shows your oldest overdue nag and one active lock on the Lock Screen and Dynamic Island. Open Nag to start or refresh activities; they end after 8 hours.")
                     } else {
                         Text("Live Activities are disabled for Nag. Enable them in iOS Settings to use this feature.")
                     }
