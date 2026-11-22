@@ -91,7 +91,7 @@ public enum NagAlarmSync {
                 }
 
                 let fireAt = quietHours.nextAllowed(
-                    after: max(request.date, Date.now.addingTimeInterval(3)), calendar: calendar
+                    after: max(request.date, now.addingTimeInterval(3)), calendar: calendar
                 )
                 let id = UUID()
                 do {
