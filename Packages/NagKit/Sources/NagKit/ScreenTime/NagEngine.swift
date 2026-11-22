@@ -92,6 +92,9 @@ public enum NagEngine {
             }
         }
         await NotificationSync.apply(plan, tasks: state.tasks, now: now)
+        if #available(iOS 26, *), Bundle.main.bundleURL.pathExtension == "app" {
+            await NagAlarmSync.apply(state: store.load(), now: .now, calendar: calendar)
+        }
 
         for profile in autoUnlocked {
             await NotificationSync.alert(
