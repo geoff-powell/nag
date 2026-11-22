@@ -266,14 +266,12 @@ struct TaskEditorView: View {
         if startNow && isNew && !isCustom { task.startAt = .now }
         task.alignStartToSchedule(previous: original, now: .now, calendar: model.calendar)
         if !limitSnoozes { task.style.maxSnoozes = nil }
+        model.saveTask(task)
         if #available(iOS 26, *), task.style.alarmMode != .off {
-            let savedTask = task
             Task {
                 await NagAlarmSync.requestAuthorizationIfNeeded()
-                model.saveTask(savedTask)
+                model.sync()
             }
-        } else {
-            model.saveTask(task)
         }
         dismiss()
     }
