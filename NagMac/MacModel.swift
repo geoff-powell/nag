@@ -44,6 +44,8 @@ final class MacModel {
     @ObservationIgnored private var changeObservation: SharedStore.ChangeObservation?
     @ObservationIgnored private var cloudSync: CloudTaskSync?
     @ObservationIgnored private var quietHoursSync: QuietHoursSync?
+    @ObservationIgnored private var heartbeatSync: DeviceHeartbeatSync?
+    @ObservationIgnored private let presence = MacPresence()
     @ObservationIgnored private var tickTask: Task<Void, Never>?
     @ObservationIgnored private var notificationTask: Task<Void, Never>?
     @ObservationIgnored private var lastNotificationSync = Date.distantPast
@@ -75,6 +77,12 @@ final class MacModel {
         }
         quietHoursSync = quietHours
         quietHours.start()
+        // The Mac only publishes. Its own nagging never depends on the iPhone's heartbeat.
+        let heartbeat = DeviceHeartbeatSync(platform: .mac, store: store) {}
+        heartbeatSync = heartbeat
+        heartbeat.start()
+        presence.onChange = { [weak self] in self?.publishPresence() }
+        presence.start()
 
         tickTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -105,6 +113,22 @@ final class MacModel {
         if changed || now.timeIntervalSince(lastNotificationSync) >= 60 {
             syncNotifications()
         }
+        publishPresence(now: now)
+    }
+
+    /// Tells the iPhone whether this Mac is carrying the nag. Rate limited by `DeviceHeartbeatSync`.
+    func publishPresence(now: Date = .now) {
+        let canNag = NagPanelController.isEnabled
+            || notificationStatus == .authorized
+            || notificationStatus == .provisional
+        let activity = DeviceHandoff.macActivity(
+            secondsSinceInput: presence.secondsSinceInput,
+            screenLocked: presence.screenLocked,
+            asleep: presence.asleep,
+            canNag: canNag,
+            enabled: state.settings.deviceHandoff
+        )
+        heartbeatSync?.publish(activity, now: now)
     }
 
     func reload() {
@@ -118,6 +142,7 @@ final class MacModel {
         let latest = store.load()
         guard latest != state else { return }
         let nagsChanged = latest.tasks != state.tasks
+            || latest.settings.focusFilter != state.settings.focusFilter
         state = latest
         onChange?()
         if nagsChanged {
@@ -154,6 +179,7 @@ final class MacModel {
             let plan = planner.plan(
                 tasks: state.tasks,
                 quietHours: state.settings.quietHours,
+                focusFilter: state.settings.focusFilter,
                 tone: state.settings.nagTone,
                 now: now
             )
@@ -248,6 +274,13 @@ final class MacModel {
         !state.isTaskRequiredByEngagedLock(id)
     }
 
+    func setTaskArchived(_ id: UUID, archived: Bool) {
+        update { $0.setTaskArchived(id, archived: archived, at: .now) }
+        if state.task(id)?.isArchived == true {
+            NotificationSync.removeDeliveredUndoFollowUp(taskID: id)
+        }
+    }
+
     func deleteTask(_ id: UUID) {
         guard canDeleteTask(id) else { return }
         update { $0.deleteTask(id, at: .now) }
@@ -319,7 +352,7 @@ final class MacModel {
     }
 
     func clearFinished() {
-        let finished = state.tasks.filter { $0.isFinished && canDeleteTask($0.id) }.map(\.id)
+        let finished = state.tasks.filter { !$0.isArchived && $0.isFinished && canDeleteTask($0.id) }.map(\.id)
         guard !finished.isEmpty else { return }
         update { state in
             for id in finished { state.deleteTask(id, at: .now) }
@@ -354,6 +387,7 @@ final class MacModel {
                 var updated = profile
                 updated.status = state.profiles[index].status
                 updated.lastScheduledLockAt = state.profiles[index].lastScheduledLockAt
+                updated.lastFocusLockAt = state.profiles[index].lastFocusLockAt
                 updated.autoLockPausedUntil = state.profiles[index].autoLockPausedUntil
                 state.profiles[index] = updated
             } else {
@@ -410,6 +444,24 @@ final class MacModel {
             guard let index = state.profiles.firstIndex(where: { $0.id == id }) else { return }
             change(&state.profiles[index])
         }
+    }
+
+    // MARK: - Focus
+
+    /// Applies the Focus filter macOS sent (or clears it when the Focus ends). The tick that follows
+    /// re-applies blocking and the panel; notifications are re-planned before returning.
+    func applyFocusFilter(lockIDs: Set<UUID>, minimumUrgency: FocusUrgency, quietHours: Bool) async {
+        let calendar = calendar
+        update { state in
+            state.applyFocusFilter(
+                lockIDs: lockIDs,
+                minimumUrgency: minimumUrgency,
+                quietHours: quietHours,
+                now: .now,
+                calendar: calendar
+            )
+        }
+        await waitForNotificationSync()
     }
 
     // MARK: - Settings

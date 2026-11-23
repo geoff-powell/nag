@@ -47,7 +47,8 @@ public struct NagActivityContent: Hashable, Sendable, Codable {
         guard !task.isFinished,
               task.isNagging(at: now),
               !task.isSnoozed(at: now),
-              !task.isWorking(at: now)
+              !task.isWorking(at: now),
+              state.settings.focusFilter.allows(task.style)
         else { return nil }
 
         let overdue = now.timeIntervalSince(task.startAt)

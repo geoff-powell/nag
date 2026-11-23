@@ -54,7 +54,7 @@ internal static class Program
             Find(form, "Mark done").PerformClick(); Application.DoEvents();
             Check(store.Load().Reminders.Count(n => n.Finished) == 1, "UI completion persisted");
             Descendants(form).OfType<Button>().First(b => b.Text.StartsWith("Snooze 10m") && b.Enabled).PerformClick(); Application.DoEvents();
-            Check(store.Load().Reminders.Count(n => n.Snoozed(DateTime.Now)) == 1, "UI snooze persisted");
+            Check(store.Load().Reminders.Count(n => n.Snoozed(DateTimeOffset.UtcNow)) == 1, "UI snooze persisted");
             Find(form, "Done").PerformClick(); Application.DoEvents();
             Check(Descendants(form).OfType<Button>().Any(b => b.Text == "Reopen"), "done filter exposes reopen");
             Find(form, "Reopen").PerformClick(); Application.DoEvents();
@@ -106,11 +106,11 @@ internal static class Program
             Check(handle != IntPtr.Zero, "disposable lock target opened");
             ShowWindow(handle, 9); SetForegroundWindow(handle);
             Check(GetForegroundWindow() == handle, "disposable target is foreground");
-            var now = DateTime.Now;
+            var now = DateTimeOffset.Now;
             var state = new State
             {
                 Settings = new() { QuietEnabled = true, QuietStartHour = now.Hour, QuietEndHour = (now.Hour + 1) % 24 },
-                Reminders = [new() { Title = "Test lock", Due = now.AddMinutes(-1) }],
+                Reminders = [new() { Title = "Test lock", Due = now.LocalDateTime.AddMinutes(-1) }],
                 Locks = [new() { Enabled = true, Executables = [targetPath] }]
             };
             using var form = new MainWindow(new Store(Path.Combine(directory, "lock-test")), state, true);

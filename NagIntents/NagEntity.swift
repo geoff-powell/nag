@@ -73,7 +73,7 @@ struct NagEntityQuery: EntityQuery, EntityStringQuery {
     private func entities(in state: NagState) -> [NagEntity] {
         let now = Date.now
         return state.tasks
-            .filter { !$0.isFinished }
+            .filter { !$0.isArchived && !$0.isFinished }
             .map { NagEntity($0, state: state, now: now, calendar: .current) }
     }
 }

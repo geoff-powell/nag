@@ -109,6 +109,7 @@ private struct MacLockRow: View {
             : profile.requirements.map { UnlockEvaluator.title(for: $0.kind, state: model.state) }.joined(separator: " + ")]
         if let schedule = profile.schedule { parts.append(schedule.label) }
         if profile.lockWhileNagsDue { parts.append("Locks while nags are due") }
+        if profile.session?.trigger == .focus { parts.append("On for your Focus") }
         return parts.joined(separator: " · ")
     }
 }
@@ -361,7 +362,7 @@ private struct MacRequirementDraft: View {
                 switch kind {
                 case .tasks:
                     Section("Nags") {
-                        ForEach(model.state.tasks.filter { !$0.isFinished }) { task in
+                        ForEach(model.state.tasks.filter { !$0.isFinished && (!$0.isArchived || taskIDs.contains($0.id)) }) { task in
                             Toggle(task.title, isOn: Binding(
                                 get: { taskIDs.contains(task.id) },
                                 set: { if $0 { taskIDs.insert(task.id) } else { taskIDs.remove(task.id) } }

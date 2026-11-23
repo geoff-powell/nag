@@ -140,7 +140,7 @@ public struct WidgetSnapshot: Hashable, Sendable {
         }
 
         for task in state.tasks {
-            guard !task.isFinished else { continue }
+            guard !task.isArchived, !task.isFinished else { continue }
             let nagStart = task.nagStart
             if !task.isOutstanding(at: now) { consider(nagStart) }
             consider(task.snoozedUntil)

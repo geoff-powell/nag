@@ -164,7 +164,7 @@ extension NagTask {
 
     /// When nagging starts, or resumes after a snooze, for the current occurrence.
     public var nagStart: Date? {
-        guard !isFinished else { return nil }
+        guard !isArchived, !isFinished else { return nil }
         let base = max(startAt, snoozedUntil ?? .distantPast)
         if let workEnd = workingUntil(), workEnd > base { return workEnd }
         return base
@@ -172,7 +172,7 @@ extension NagTask {
 
     /// The current occurrence has started and isn't done. Snoozed nags are still outstanding.
     public func isOutstanding(at now: Date) -> Bool {
-        !isFinished && startAt <= now
+        !isArchived && !isFinished && startAt <= now
     }
 
     /// Nag notifications should be going off right now.
@@ -187,7 +187,7 @@ extension NagTask {
     }
 
     public func isStarted(at now: Date) -> Bool {
-        guard !isFinished, let startedAt else { return false }
+        guard !isArchived, !isFinished, let startedAt else { return false }
         return startedAt >= startAt
     }
 
@@ -214,7 +214,7 @@ extension NagTask {
 
     /// Done is available: one-off nags until finished, repeating nags for today's or an overdue occurrence.
     public func canComplete(at now: Date, calendar: Calendar) -> Bool {
-        isRepeating ? startAt < calendar.endOfDay(for: now) : completedAt == nil
+        !isArchived && (isRepeating ? startAt < calendar.endOfDay(for: now) : completedAt == nil)
     }
 
     public var snoozesLeft: Int? {
@@ -228,6 +228,7 @@ extension NagTask {
     /// Marks the current occurrence done. `keyScanned` says the nag's key was scanned to prove it, which
     /// only the app can check; it's kept for the completion history.
     public mutating func complete(at now: Date, calendar: Calendar, keyScanned: Bool = false) {
+        guard !isArchived else { return }
         let undo = CompletionUndo(
             startAt: startAt,
             snoozedUntil: snoozedUntil,
@@ -255,7 +256,7 @@ extension NagTask {
     }
 
     public func canUndoCompletion(at now: Date) -> Bool {
-        guard let completionUndo else { return false }
+        guard !isArchived, let completionUndo else { return false }
         let elapsed = now.timeIntervalSince(completionUndo.completedAtMoment)
         return elapsed > -60 && elapsed < NagUndo.window
     }
