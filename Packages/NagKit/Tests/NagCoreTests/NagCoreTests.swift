@@ -146,6 +146,44 @@ enum DSTFixture {
             #expect(task.hasValidSchedule)
         }
     }
+
+    @Test func eachPresetIsMatchedAfterItIsApplied() {
+        let key = UnlockKey(name: "Pill bottle", kind: .code, fingerprint: "first")
+        for keys in [[], [key]] {
+            for preset in NagPreset.all {
+                var task = NagTask(title: preset.name)
+                preset.apply(to: &task, keys: keys, now: Fixture.date(28, 8), calendar: calendar)
+                #expect(NagPreset.matching(task, keys: keys) == preset)
+            }
+        }
+    }
+
+    @Test func editingAPresetSettingMakesTheNagCustom() {
+        var task = NagTask(title: "Laundry")
+        NagPreset.chore.apply(to: &task, keys: [], now: Fixture.date(28, 8), calendar: calendar)
+        task.style.intervalMinutes = 30
+        #expect(NagPreset.matching(task, keys: []) == nil)
+    }
+
+    @Test func medicationMatchesWhicheverPairedKeyIsChosen() {
+        let first = UnlockKey(name: "Pill bottle", kind: .code, fingerprint: "first")
+        let second = UnlockKey(name: "Backup", kind: .nfc, fingerprint: "second")
+        var task = NagTask(title: "Medication")
+        NagPreset.medication.apply(to: &task, keys: [first, second], now: Fixture.date(28, 8), calendar: calendar)
+        task.proof = .scanKey(second.id)
+        #expect(NagPreset.matching(task, keys: [first, second]) == .medication)
+        task.proof = .none
+        #expect(NagPreset.matching(task, keys: [first, second]) == nil)
+    }
+
+    @Test func styleChoicesAlwaysIncludeTheCurrentValue() {
+        #expect(NagStyleChoices.minutes(NagStyleChoices.intervals, including: 15) == NagStyleChoices.intervals)
+        #expect(NagStyleChoices.minutes(NagStyleChoices.intervals, including: 20) == [1, 2, 5, 10, 15, 20, 30, 60])
+        #expect(NagStyleChoices.snoozeLimits(including: nil) == NagStyleChoices.snoozeLimits)
+        #expect(NagStyleChoices.snoozeLimits(including: 2) == [0, 1, 2, 3, 5, nil])
+        #expect(NagStyleChoices.snoozeLimitLabel(0) == "None")
+        #expect(NagStyleChoices.snoozeLimitLabel(nil) == "Unlimited")
+    }
 }
 
 struct TaskRuleTests {

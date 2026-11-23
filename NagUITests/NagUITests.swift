@@ -50,6 +50,32 @@ final class NagUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Save"].isEnabled)
     }
 
+    func testPresetCardSetsUpANagInOneTap() {
+        launch()
+        app.buttons["New nag"].firstMatch.tap()
+        let title = app.textFields["What needs doing?"]
+        XCTAssertTrue(title.waitForExistence(timeout: 3))
+        title.tap()
+        title.typeText("Dentist")
+
+        // A new nag starts with the Chore settings; advanced options stay tucked away.
+        let chore = app.buttons["preset.chore"]
+        let appointment = app.buttons["preset.appointment"]
+        XCTAssertTrue(chore.isSelected)
+        XCTAssertFalse(app.switches["Break through Focus"].exists)
+        pause()
+
+        appointment.tap()
+        XCTAssertTrue(appointment.isSelected)
+        XCTAssertFalse(chore.isSelected)
+        pause()
+
+        app.buttons["Save"].tap()
+        XCTAssertTrue(status("Dentist").waitForExistence(timeout: 3))
+        XCTAssertTrue(status("Dentist").label.hasPrefix("Due now"), status("Dentist").label)
+        pause()
+    }
+
     func testCustomTimesNagShowsEachTime() {
         launch()
         app.navigationBars["Nags"].buttons["New nag"].tap()
