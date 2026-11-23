@@ -1,4 +1,5 @@
 import NagCore
+import NagKit
 import SwiftUI
 import WidgetKit
 
@@ -29,7 +30,7 @@ struct DueNagsView: View {
                     NagRowView(summary: summary)
                 }
             } else {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Space.xs) {
                     ForEach(Array(visibleDue)) { summary in
                         NagRowView(summary: summary, actionsInline: true)
                         if summary.id != visibleDue.last?.id { Divider() }

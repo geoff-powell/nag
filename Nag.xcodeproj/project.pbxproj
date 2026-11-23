@@ -146,7 +146,14 @@
 			path = NagIntents;
 			sourceTree = "<group>";
 		};
-		AA0000000000000000000027 /* NagMacUITests */ = {
+		AA0000000000000000000027 /* NagFocus */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = NagFocus;
+			sourceTree = "<group>";
+		};
+		AA0000000000000000000028 /* NagMacUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = NagMacUITests;
 			sourceTree = "<group>";
@@ -230,7 +237,8 @@
 				AA0000000000000000000024 /* NagMac */,
 				AA0000000000000000000025 /* NagUITests */,
 				AA0000000000000000000026 /* NagIntents */,
-				AA0000000000000000000027 /* NagMacUITests */,
+				AA0000000000000000000027 /* NagFocus */,
+				AA0000000000000000000028 /* NagMacUITests */,
 				5BE1429C467D86951F1B80F4 /* NagWidgets */,
 				AA0000000000000000000004 /* Config */,
 				AA0000000000000000000003 /* Products */,
@@ -318,6 +326,7 @@
 			fileSystemSynchronizedGroups = (
 				AA0000000000000000000020 /* Nag */,
 				AA0000000000000000000026 /* NagIntents */,
+				AA0000000000000000000027 /* NagFocus */,
 			);
 			name = Nag;
 			packageProductDependencies = (
@@ -410,6 +419,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				AA0000000000000000000024 /* NagMac */,
+				AA0000000000000000000027 /* NagFocus */,
 			);
 			name = NagMac;
 			packageProductDependencies = (
@@ -455,7 +465,7 @@
 				AA00000000000000000000A4 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				AA0000000000000000000027 /* NagMacUITests */,
+				AA0000000000000000000028 /* NagMacUITests */,
 			);
 			name = NagMacUITests;
 			productName = NagMacUITests;

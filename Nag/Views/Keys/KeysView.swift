@@ -9,11 +9,11 @@ struct KeysView: View {
         List {
             Section {
                 ForEach(model.state.keys) { key in
-                    HStack {
+                    HStack(spacing: Space.m) {
                         Image(systemName: key.kind == .nfc ? "wave.3.right" : "qrcode")
                             .foregroundStyle(.orange)
-                            .frame(width: 28)
-                        VStack(alignment: .leading) {
+                            .frame(width: Metrics.iconColumn)
+                        VStack(alignment: .leading, spacing: Space.xxs) {
                             Text(key.name)
                             Text(key.kind == .nfc ? "NFC tag" : "Code")
                                 .font(.caption)
@@ -100,7 +100,7 @@ struct AddKeyView: View {
                             CodeScannerView { payload in
                                 fingerprint = KeyFingerprint.code(payload)
                             }
-                            .frame(height: 240)
+                            .frame(height: Metrics.cameraPreviewHeight)
                             .listRowInsets(EdgeInsets())
                         } else if cameraAllowed == false {
                             Text("Allow camera access in Settings to scan codes.")

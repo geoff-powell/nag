@@ -1,3 +1,4 @@
+import AppIntents
 import BackgroundTasks
 import NagKit
 import SwiftUI
@@ -40,4 +41,8 @@ enum BackgroundRefresh {
         request.earliestBeginDate = .now.addingTimeInterval(20 * 60)
         try? BGTaskScheduler.shared.submit(request)
     }
+}
+
+struct NagAppIntents: AppIntentsPackage {
+    static let includedPackages: [any AppIntentsPackage.Type] = [NagAlarmIntents.self]
 }

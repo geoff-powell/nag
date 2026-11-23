@@ -55,7 +55,7 @@ struct RequirementDraftView: View {
                 switch kind {
                 case .completeTasks:
                     Section {
-                        ForEach(model.state.tasks.filter { !$0.isFinished }) { task in
+                        ForEach(model.state.tasks.filter { !$0.isFinished && (!$0.isArchived || taskIDs.contains($0.id)) }) { task in
                             Button {
                                 if taskIDs.contains(task.id) { taskIDs.remove(task.id) } else { taskIDs.insert(task.id) }
                             } label: {
