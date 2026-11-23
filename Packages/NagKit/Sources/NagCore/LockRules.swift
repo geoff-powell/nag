@@ -177,7 +177,7 @@ extension LockProfile {
         return false
     }
 
-    private mutating func replaceSessionTrigger(with trigger: LockTrigger) {
+    fileprivate mutating func replaceSessionTrigger(with trigger: LockTrigger) {
         switch status {
         case .off:
             break
@@ -192,8 +192,9 @@ extension LockProfile {
 }
 
 public enum LockMaintenance {
-    /// Brings every lock up to date: expired unlocks come back, schedules and Focus filters start and
-    /// stop, due nags switch on nag-triggered locks, and locks whose requirements are met unlock themselves.
+    /// Brings every lock up to date: expired unlocks come back, schedules and Focus filters start
+    /// and stop, place locks follow arrivals and departures, due nags switch on nag-triggered locks,
+    /// and locks whose requirements are met unlock themselves.
     /// Returns the locks that were unlocked automatically.
     /// - Parameter tolerance: Treat unlock expiries and schedule boundaries this close ahead as reached.
     @discardableResult
@@ -216,12 +217,28 @@ public enum LockMaintenance {
             let lookahead = now.addingTimeInterval(tolerance)
             let scheduleActive = profile.schedule?.windowStart(containing: lookahead, calendar: calendar) != nil
             let focusActive = state.settings.focusFilter.lockStarts[profile.id] != nil
+            let presence = state.resolvedPlace(profile.place).flatMap { state.placePresence[$0.id.uuidString] }
+            let placeActive = presence?.inside == true
+            let fallbackTrigger: LockTrigger? = focusActive ? .focus : (scheduleActive ? .schedule : nil)
+
+            // When conditions overlap, keep the current session (including a temporary unlock)
+            // if another condition still requires the lock.
+            switch profile.session?.trigger {
+            case .place where !placeActive:
+                if let fallbackTrigger { profile.replaceSessionTrigger(with: fallbackTrigger) }
+            case .schedule where !scheduleActive && !focusActive && placeActive,
+                 .focus where !focusActive && !scheduleActive && placeActive:
+                profile.replaceSessionTrigger(with: .place)
+            default:
+                break
+            }
 
             if case .unlocked(let session, let until) = profile.status, until <= lookahead {
                 let nextTrigger: LockTrigger? = switch session.trigger {
                 case .manual: .manual
                 case .schedule: scheduleActive ? .schedule : (focusActive ? .focus : nil)
                 case .nags: nagsDue ? .nags : (focusActive ? .focus : (scheduleActive ? .schedule : nil))
+                case .place: placeActive ? .place : fallbackTrigger
                 case .focus: focusActive ? .focus : (scheduleActive ? .schedule : nil)
                 }
                 if let nextTrigger {
@@ -233,6 +250,7 @@ public enum LockMaintenance {
 
             profile.applySchedule(at: now, calendar: calendar, lookahead: tolerance, focusActive: focusActive)
             profile.applyFocus(state.settings.focusFilter, at: now, scheduleActive: scheduleActive)
+            profile.applyPlace(presence: presence, now: now)
 
             if profile.lockWhileNagsDue, nagsDue, case .off = profile.status,
                (profile.autoLockPausedUntil ?? .distantPast) <= now {

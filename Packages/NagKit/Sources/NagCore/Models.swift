@@ -250,6 +250,12 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
     public var externalID: String?
     /// Opens the item the nag came from: a note, an event, a Muse board.
     public var link: URL?
+    /// Starts the nag when you arrive at or leave a saved place instead of at a time. While it waits,
+    /// `startAt` is `PlaceTrigger.waitingStart`, so builds that don't know about places never nag.
+    public var placeTrigger: PlaceTrigger?
+    /// When `placeTrigger` was last set or removed. Merges keep the newest, so a copy re-saved by an
+    /// older build (which drops the trigger) never wins. `nil` when it was never set.
+    public var placeTriggerChangedAt: Date?
 
     public init(
         id: UUID = UUID(),
@@ -265,6 +271,7 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         source: String? = nil,
         externalID: String? = nil,
         link: URL? = nil,
+        placeTrigger: PlaceTrigger? = nil,
         now: Date = .now
     ) {
         self.id = id
@@ -289,6 +296,8 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         self.source = source
         self.externalID = externalID
         self.link = link
+        self.placeTrigger = placeTrigger
+        self.placeTriggerChangedAt = placeTrigger == nil ? nil : now
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -296,6 +305,7 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         case completedAt, lastCompletedAt, snoozedUntil, startedAt, snoozeCount
         case completionUndo, undoneCompletionAt, archiveStatus
         case source, externalID, link
+        case placeTrigger, placeTriggerChangedAt
     }
 
     public init(from decoder: any Decoder) throws {
@@ -328,6 +338,9 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         source = try c.decodeIfPresent(String.self, forKey: .source)
         externalID = try c.decodeIfPresent(String.self, forKey: .externalID)
         link = try c.decodeIfPresent(URL.self, forKey: .link)
+        // Lenient: a trigger from a newer build that this one can't read is treated as no trigger.
+        placeTrigger = try? c.decodeIfPresent(PlaceTrigger.self, forKey: .placeTrigger)
+        placeTriggerChangedAt = try? c.decodeIfPresent(Date.self, forKey: .placeTriggerChangedAt)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -357,6 +370,8 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         try c.encodeIfPresent(source, forKey: .source)
         try c.encodeIfPresent(externalID, forKey: .externalID)
         try c.encodeIfPresent(link, forKey: .link)
+        try c.encodeIfPresent(placeTrigger, forKey: .placeTrigger)
+        try c.encodeIfPresent(placeTriggerChangedAt, forKey: .placeTriggerChangedAt)
     }
 }
 
@@ -427,10 +442,16 @@ public struct UnlockRequirement: Codable, Hashable, Identifiable, Sendable {
 }
 
 /// What switched a lock on. Decides what switches it off again.
+///
+/// Locks are stored on the device only, but decoding is lenient anyway: an unknown trigger (say, from
+/// a newer build's state file after a downgrade) reads as `.manual` rather than making every lock unreadable.
 public enum LockTrigger: String, Codable, Sendable {
     case manual
     case schedule
     case nags
+    /// Arriving at the lock's place. Switches off again on leaving.
+    case place
+
     case focus
 
     public init(from decoder: any Decoder) throws {
@@ -488,6 +509,10 @@ public struct LockProfile: Codable, Hashable, Identifiable, Sendable {
     public var lastFocusLockAt: Date?
     /// After an emergency unlock, due nags don't switch the lock back on until this time.
     public var autoLockPausedUntil: Date?
+    /// Switch on while you're at this place, and off again when you leave.
+    public var place: PlaceRef?
+    /// The arrival that last switched this lock on, so earning an unlock mid-visit sticks.
+    public var lastPlaceLockAt: Date?
 
     public init(
         id: UUID = UUID(),
@@ -501,7 +526,8 @@ public struct LockProfile: Codable, Hashable, Identifiable, Sendable {
         schedule: LockSchedule? = nil,
         lockWhileNagsDue: Bool = false,
         strict: Bool = false,
-        message: String = "Do the thing first. Future you will thank you."
+        message: String = "Do the thing first. Future you will thank you.",
+        place: PlaceRef? = nil
     ) {
         self.id = id
         self.name = name
@@ -519,6 +545,8 @@ public struct LockProfile: Codable, Hashable, Identifiable, Sendable {
         self.lastScheduledLockAt = nil
         self.lastFocusLockAt = nil
         self.autoLockPausedUntil = nil
+        self.place = place
+        self.lastPlaceLockAt = nil
     }
 }
 
@@ -640,6 +668,12 @@ public struct NagState: Codable, Hashable, Sendable {
     /// The latest heartbeats from iCloud, copied here so the DeviceActivity monitor (which can't read
     /// iCloud) plans with them too.
     public var devices: [DeviceHeartbeat]
+    /// Saved places. Stay on this device: they're never synced.
+    public var places: [SavedPlace]
+    /// Whether this device is at each saved place, keyed by place ID. Missing means not known yet.
+    public var placePresence: [String: PlacePresence]
+    /// Places from other devices (keyed by their ID) that the user pointed at one of this device's places.
+    public var placeLinks: [String: UUID]
 
     public init(
         tasks: [NagTask] = [],
@@ -647,7 +681,10 @@ public struct NagState: Codable, Hashable, Sendable {
         keys: [UnlockKey] = [],
         settings: AppSettings = AppSettings(),
         deletedTasks: [String: Date] = [:],
-        devices: [DeviceHeartbeat] = []
+        devices: [DeviceHeartbeat] = [],
+        places: [SavedPlace] = [],
+        placePresence: [String: PlacePresence] = [:],
+        placeLinks: [String: UUID] = [:]
     ) {
         self.tasks = tasks
         self.profiles = profiles
@@ -655,10 +692,13 @@ public struct NagState: Codable, Hashable, Sendable {
         self.settings = settings
         self.deletedTasks = deletedTasks
         self.devices = devices
+        self.places = places
+        self.placePresence = placePresence
+        self.placeLinks = placeLinks
     }
 
     private enum CodingKeys: String, CodingKey {
-        case tasks, profiles, keys, settings, deletedTasks, devices
+        case tasks, profiles, keys, settings, deletedTasks, devices, places, placePresence, placeLinks
     }
 
     public init(from decoder: any Decoder) throws {
@@ -669,6 +709,9 @@ public struct NagState: Codable, Hashable, Sendable {
         settings = try c.decodeIfPresent(AppSettings.self, forKey: .settings) ?? AppSettings()
         deletedTasks = try c.decodeIfPresent([String: Date].self, forKey: .deletedTasks) ?? [:]
         devices = (try? c.decodeIfPresent([DeviceHeartbeat].self, forKey: .devices)) ?? []
+        places = (try? c.decodeIfPresent([SavedPlace].self, forKey: .places)) ?? []
+        placePresence = (try? c.decodeIfPresent([String: PlacePresence].self, forKey: .placePresence)) ?? [:]
+        placeLinks = (try? c.decodeIfPresent([String: UUID].self, forKey: .placeLinks)) ?? [:]
     }
 
     public func task(_ id: UUID) -> NagTask? { tasks.first { $0.id == id } }
