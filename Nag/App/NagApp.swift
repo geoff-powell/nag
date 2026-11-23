@@ -27,6 +27,7 @@ struct NagApp: App {
         .backgroundTask(.appRefresh(BackgroundRefresh.identifier)) {
             BackgroundRefresh.schedule()
             await NagEngine.sync()
+            await appDelegate.backgroundRefresh()
         }
     }
 }

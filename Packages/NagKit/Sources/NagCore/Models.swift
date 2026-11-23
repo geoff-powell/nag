@@ -640,6 +640,8 @@ public struct NagState: Codable, Hashable, Sendable {
     /// The latest heartbeats from iCloud, copied here so the DeviceActivity monitor (which can't read
     /// iCloud) plans with them too.
     public var devices: [DeviceHeartbeat]
+    /// Accountability buddy settings. Local to this device; the shared-item set also syncs on its own key.
+    public var buddy: BuddySettings
 
     public init(
         tasks: [NagTask] = [],
@@ -647,7 +649,8 @@ public struct NagState: Codable, Hashable, Sendable {
         keys: [UnlockKey] = [],
         settings: AppSettings = AppSettings(),
         deletedTasks: [String: Date] = [:],
-        devices: [DeviceHeartbeat] = []
+        devices: [DeviceHeartbeat] = [],
+        buddy: BuddySettings = BuddySettings()
     ) {
         self.tasks = tasks
         self.profiles = profiles
@@ -655,10 +658,11 @@ public struct NagState: Codable, Hashable, Sendable {
         self.settings = settings
         self.deletedTasks = deletedTasks
         self.devices = devices
+        self.buddy = buddy
     }
 
     private enum CodingKeys: String, CodingKey {
-        case tasks, profiles, keys, settings, deletedTasks, devices
+        case tasks, profiles, keys, settings, deletedTasks, devices, buddy
     }
 
     public init(from decoder: any Decoder) throws {
@@ -669,6 +673,7 @@ public struct NagState: Codable, Hashable, Sendable {
         settings = try c.decodeIfPresent(AppSettings.self, forKey: .settings) ?? AppSettings()
         deletedTasks = try c.decodeIfPresent([String: Date].self, forKey: .deletedTasks) ?? [:]
         devices = (try? c.decodeIfPresent([DeviceHeartbeat].self, forKey: .devices)) ?? []
+        buddy = (try? c.decodeIfPresent(BuddySettings.self, forKey: .buddy)) ?? BuddySettings()
     }
 
     public func task(_ id: UUID) -> NagTask? { tasks.first { $0.id == id } }
