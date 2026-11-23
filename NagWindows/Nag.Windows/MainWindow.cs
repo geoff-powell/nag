@@ -19,10 +19,10 @@ public sealed class MainWindow : Form
     private readonly Label subtitle = new() { AutoSize = true, ForeColor = Color.DimGray };
     private readonly Label feedback = new() { Dock = DockStyle.Bottom, Height = 34, Padding = new(20, 6, 0, 0), ForeColor = Accent };
     private readonly Dictionary<string, Button> navigation = [];
-    private string page = "Nags", filter = "Open", signature = "";
+    private string page = "Nags", filter = "All", signature = "";
     private bool exiting;
     private ReminderPanel? nagPanel;
-    private DateTime lastBlockNotice;
+    private DateTimeOffset lastBlockNotice;
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal bool StartInTray { get; set; }
 
@@ -94,7 +94,7 @@ public sealed class MainWindow : Form
     }
     private void RefreshSubtitle()
     {
-        int due = state.Reminders.Count(n => n.Outstanding(DateTime.Now));
+        int due = state.Reminders.Count(n => n.Outstanding(DateTimeOffset.UtcNow));
         subtitle.Text = $"{due} waiting for you · Small steps count. " + (demo ? "Demo · App enforcement disabled" : "");
     }
     private void Render()
@@ -138,9 +138,9 @@ public sealed class MainWindow : Form
             actions.Controls.Add(b);
         }
         body.Controls.Add(actions);
-        var now = DateTime.Now;
-        var reminders = state.Reminders.Where(n => filter switch { "Open" => !n.Finished, "Due" => n.Outstanding(now), "Done" => n.Finished, _ => true })
-            .OrderBy(n => n.Finished).ThenBy(n => n.Due).ToList();
+        var now = DateTimeOffset.UtcNow;
+        var reminders = state.Reminders.Where(n => filter switch { "Open" => !n.Finished && !n.Archived, "Due" => n.Outstanding(now), "Done" => n.Finished && !n.Archived, _ => true })
+            .OrderBy(n => n.Archived).ThenBy(n => n.Finished).ThenBy(n => n.Due).ToList();
         if (reminders.Count == 0) AddText("A little breathing room.", "Add something you want to follow through on. Nag will keep it in sight until it's done.");
         foreach (var reminder in reminders)
         {
@@ -153,9 +153,9 @@ public sealed class MainWindow : Form
             {
                 var notes = Label(reminder.Notes); notes.MaximumSize = new(460, 0); notes.Margin = new(0, 0, 0, 10); card.Controls.Add(notes);
             }
-            if (reminder.Snoozed(now)) card.Controls.Add(Label($"Quiet until {reminder.SnoozedUntil:t}", 9));
+            if (reminder.Snoozed(now)) card.Controls.Add(Label($"Quiet until {reminder.SnoozedUntil?.ToLocalTime():t}", 9));
             var controls = Row();
-            if (!reminder.Finished)
+            if (!reminder.Archived && !reminder.Finished)
             {
                 var done = Button("Mark done", () => Complete(reminder.Id), true);
                 done.Enabled = reminder.Repeat == Repeat.Once || reminder.Outstanding(now); controls.Controls.Add(done);
@@ -163,7 +163,12 @@ public sealed class MainWindow : Form
                 snooze.Enabled = reminder.Outstanding(now) && !reminder.Snoozed(now) && reminder.SnoozeCount < reminder.MaxSnoozes;
                 controls.Controls.Add(snooze);
             }
-            else controls.Controls.Add(Button("Reopen", () => Change(s => { var n = s.Reminders.Single(n => n.Id == reminder.Id); n.Finished = false; n.Due = DateTime.Now; })));
+            else if (!reminder.Archived) controls.Controls.Add(Button("Reopen", () => Change(s => { var n = s.Reminders.Single(n => n.Id == reminder.Id); n.Finished = false; n.Due = DateTime.Now; })));
+            controls.Controls.Add(Button(reminder.Archived ? "Restore" : "Archive", () =>
+            {
+                filter = "All";
+                Change(s => s.Reminders.Single(n => n.Id == reminder.Id).Archived = !reminder.Archived);
+            }));
             controls.Controls.Add(Button("Edit", () => Edit(reminder)));
             controls.Controls.Add(Button("Delete", () =>
             {
@@ -195,8 +200,8 @@ public sealed class MainWindow : Form
             { current.SnoozeCount = 0; current.SnoozedUntil = null; current.LastNotified = null; current.Finished = false; }
         });
     }
-    internal void Complete(Guid id) => Change(s => s.Reminders.Single(n => n.Id == id).Complete(DateTime.Now));
-    internal void Snooze(Guid id) => Change(s => s.Reminders.Single(n => n.Id == id).Snooze(DateTime.Now));
+    internal void Complete(Guid id) => Change(s => s.Reminders.Single(n => n.Id == id).Complete(DateTimeOffset.UtcNow));
+    internal void Snooze(Guid id) => Change(s => s.Reminders.Single(n => n.Id == id).Snooze(DateTimeOffset.UtcNow));
 
     private void RenderLocks()
     {
@@ -210,18 +215,18 @@ public sealed class MainWindow : Form
         {
             var row = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new(16), BackColor = Color.White, Margin = new(0, 10, 0, 10) };
             row.Controls.Add(Label(appLock.Name, 16, true));
-            row.Controls.Add(Label(appLock.Active(DateTime.Now, state.Reminders) ? "ACTIVE" : appLock.Enabled ? "Waiting / temporarily unlocked" : "Off", 9));
+            row.Controls.Add(Label(appLock.Active(DateTimeOffset.UtcNow, state.Reminders) ? "ACTIVE" : appLock.Enabled ? "Waiting / temporarily unlocked" : "Off", 9));
             foreach (string exe in appLock.Executables) row.Controls.Add(Label(Path.GetFileName(exe), 9));
-            row.Controls.Add(Label(appLock.WhileDue ? "Until all due nags are done" : $"Timer ends {appLock.Until:g}", 9));
+            row.Controls.Add(Label(appLock.WhileDue ? "Until all due nags are done" : $"Timer ends {appLock.Until?.ToLocalTime():g}", 9));
             var actions = Row();
             actions.Controls.Add(Button(appLock.Enabled ? "Turn off" : "Turn on", () => Change(s =>
             {
                 var item = s.Locks.Single(l => l.Id == appLock.Id);
-                if (!item.Enabled && !item.WhileDue && item.Until <= DateTime.Now)
+                if (!item.Enabled && !item.WhileDue && item.Until <= DateTimeOffset.UtcNow)
                     throw new InvalidOperationException("This timer has ended. Create a new timed lock.");
                 item.Enabled = !item.Enabled;
             })));
-            actions.Controls.Add(Button("Emergency unlock · 5m", () => Change(s => s.Locks.Single(l => l.Id == appLock.Id).EmergencyUntil = DateTime.Now.AddMinutes(5))));
+            actions.Controls.Add(Button("Emergency unlock · 5m", () => Change(s => s.Locks.Single(l => l.Id == appLock.Id).EmergencyUntil = DateTimeOffset.UtcNow.AddMinutes(5))));
             actions.Controls.Add(Button("Delete", () => Change(s => s.Locks.RemoveAll(l => l.Id == appLock.Id))));
             row.Controls.Add(actions); body.Controls.Add(row);
         }
@@ -252,11 +257,11 @@ public sealed class MainWindow : Form
         }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "Could not change open at login"); }
     }
-    private string StateSignature() => string.Join('|', state.Reminders.Select(n => n.Id + n.Status(DateTime.Now)))
-        + string.Join('|', state.Locks.Select(l => l.Active(DateTime.Now, state.Reminders)));
+    private string StateSignature() => string.Join('|', state.Reminders.Select(n => n.Id + n.Status(DateTimeOffset.UtcNow)))
+        + string.Join('|', state.Locks.Select(l => l.Active(DateTimeOffset.UtcNow, state.Reminders)));
     private void Tick()
     {
-        var now = DateTime.Now;
+        var now = DateTimeOffset.UtcNow;
         var due = state.Reminders.Where(n => n.ShouldNotify(now, state.Settings)).ToList();
         if (due.Count > 0)
         {
@@ -275,13 +280,14 @@ public sealed class MainWindow : Form
     }
     private void UpdatePanel()
     {
-        var due = state.Reminders.Where(n => n.Outstanding(DateTime.Now) && !n.Snoozed(DateTime.Now)).ToList();
-        if (due.Count == 0 || state.Settings.IsQuiet(DateTime.Now)) { nagPanel?.Hide(); return; }
+        var now = DateTimeOffset.UtcNow;
+        var due = state.Reminders.Where(n => n.Outstanding(now) && !n.Snoozed(now)).ToList();
+        if (due.Count == 0 || state.Settings.IsQuiet(now)) { nagPanel?.Hide(); return; }
         if (nagPanel is null || nagPanel.IsDisposed) nagPanel = new ReminderPanel(this);
         nagPanel.UpdateReminders(due);
         if (!nagPanel.Visible) nagPanel.Show();
     }
-    private void EnforceLocks(DateTime now)
+    private void EnforceLocks(DateTimeOffset now)
     {
         var active = state.Locks.Where(l => l.Active(now, state.Reminders)).ToList();
         if (active.Count == 0) return;
@@ -309,7 +315,7 @@ public sealed class MainWindow : Form
         || path.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.Windows) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     private void Quit()
     {
-        if (!demo && state.Locks.Any(l => l.Active(DateTime.Now, state.Reminders))
+        if (!demo && state.Locks.Any(l => l.Active(DateTimeOffset.UtcNow, state.Reminders))
             && MessageBox.Show(this, "Quitting stops active app locks and reminders. Quit anyway?", "Nag", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         exiting = true; nagPanel?.Dispose(); tray.Visible = false; Close();
     }

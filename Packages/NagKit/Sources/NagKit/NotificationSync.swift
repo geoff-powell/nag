@@ -91,6 +91,8 @@ public enum NotificationSync {
         content.userInfo = [NagID.UserInfo.taskID: notification.taskID.uuidString]
         content.interruptionLevel = notification.timeSensitive ? .timeSensitive : .active
         content.relevanceScore = 1
+        // Matched by a Focus filter's notification predicate (see `FocusFilter`).
+        content.filterCriteria = notification.filterCriteria
 
         let trigger: UNNotificationTrigger
         switch notification.trigger {
@@ -110,6 +112,7 @@ public enum NotificationSync {
         content.sound = .default
         content.categoryIdentifier = NagID.Category.alert
         content.interruptionLevel = .timeSensitive
+        content.filterCriteria = FocusUrgency.systemFilterCriteria
         if let profileID {
             content.userInfo = [NagID.UserInfo.profileID: profileID.uuidString]
         }
@@ -128,6 +131,7 @@ public enum NotificationSync {
         content.sound = .default
         content.categoryIdentifier = NagID.Category.undo
         content.interruptionLevel = .active
+        content.filterCriteria = FocusUrgency.systemFilterCriteria
         content.userInfo = [NagID.UserInfo.taskID: task.id.uuidString]
         let request = UNNotificationRequest(
             identifier: "nag.undo.\(task.id.uuidString)",

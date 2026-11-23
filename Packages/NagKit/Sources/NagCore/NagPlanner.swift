@@ -62,6 +62,18 @@ extension QuietHours {
     }
 }
 
+extension NagTask {
+    /// One alarm per occurrence, with a new alarm after a snooze. Started nags use normal check-ins.
+    public func alarmDate(quietHours: QuietHours, focusFilter: FocusFilter, calendar: Calendar) -> Date? {
+        guard style.alarmMode != .off, !focusFilter.quietHours, focusFilter.allows(style),
+              let nagStart, workingUntil() == nil else { return nil }
+        let date = style.alarmMode == .atTopTier
+            ? max(nagStart, startAt.addingTimeInterval(NagMessages.tierStarts.last ?? 0))
+            : nagStart
+        return quietHours.nextAllowed(after: date, calendar: calendar)
+    }
+}
+
 /// A notification the platform layer should have pending.
 public struct PlannedNotification: Hashable, Sendable {
     public enum Trigger: Hashable, Sendable {
@@ -79,6 +91,27 @@ public struct PlannedNotification: Hashable, Sendable {
     public var body: String
     public var category: String
     public var timeSensitive: Bool
+    public var filterCriteria: String
+
+    public init(
+        identifier: String,
+        taskID: UUID,
+        trigger: Trigger,
+        title: String,
+        body: String,
+        category: String,
+        timeSensitive: Bool,
+        filterCriteria: String = FocusUrgency.systemFilterCriteria
+    ) {
+        self.identifier = identifier
+        self.taskID = taskID
+        self.trigger = trigger
+        self.title = title
+        self.body = body
+        self.category = category
+        self.timeSensitive = timeSensitive
+        self.filterCriteria = filterCriteria
+    }
 }
 
 public struct NagPlan: Hashable, Sendable {
@@ -113,9 +146,18 @@ public struct NagPlanner: Sendable {
     public func plan(
         tasks: [NagTask],
         quietHours: QuietHours,
+        focusFilter: FocusFilter = FocusFilter(),
         tone: NagTone = .standard,
+        handoffUntil: Date? = nil,
         now: Date
     ) -> NagPlan {
+        let outstandingCount = tasks.filter { $0.isOutstanding(at: now) }.count
+        // A Focus filter that switches quiet hours on silences all nags until the Focus ends. No wake-up
+        // is planned: the system runs the Focus filter intent when the Focus ends, which re-plans.
+        if focusFilter.quietHours {
+            return NagPlan(notifications: [], nextWake: nil, outstandingCount: outstandingCount)
+        }
+
         var repeating: [PlannedNotification] = []
         var oneOffs: [(date: Date, notification: PlannedNotification)] = []
         var wake: Date?
@@ -125,20 +167,25 @@ public struct NagPlanner: Sendable {
 
         let quietNow = quietHours.contains(now, calendar: calendar)
         let until = now.addingTimeInterval(horizon)
+        // Another device has the nag until this moment: sparse reminders before it, the usual escalation
+        // after it, and a wake-up at it so repeating notifications come back.
+        let handoff = handoffUntil.flatMap { $0 > now ? $0 : nil }
+        if let handoff { considerWake(handoff) }
 
         for task in tasks {
-            guard let start = task.nagStart else { continue }
+            guard focusFilter.allows(task.style), let start = task.nagStart else { continue }
             let effectiveTone = task.style.tone ?? tone
             let base = TimeInterval(max(1, task.style.intervalMinutes) * 60)
             let checkIn = task.isStarted(at: now)
             if checkIn, let workingUntil = task.workingUntil() { considerWake(workingUntil) }
             let category = NagID.Category.forTask(task, canSnooze: (task.snoozesLeft ?? 1) > 0)
+            let filterCriteria = FocusUrgency.filterCriteria(for: task.style)
             let contentKey = StableHash.hex(
-                "\(task.title)|\(task.notes)|\(category)|\(task.style.breakThroughFocus)|\(effectiveTone.rawValue)|\(checkIn)"
+                "\(task.title)|\(task.notes)|\(category)|\(task.style.breakThroughFocus)|\(filterCriteria)|\(effectiveTone.rawValue)|\(checkIn)"
             )
             let prefix = "\(NagID.nagNotificationPrefix)\(task.id.uuidString)|"
 
-            if start <= now, allowRepeating, !quietNow {
+            if start <= now, allowRepeating, !quietNow, handoff == nil {
                 let overdue = now.timeIntervalSince(task.startAt)
                 let escalation = checkIn ? Escalation.steady : task.style.escalation
                 let seconds = Int(escalation.interval(base: base, overdue: overdue).rounded())
@@ -152,7 +199,8 @@ public struct NagPlanner: Sendable {
                         ? NagMessages.checkInRepeatingBody(title: task.title, tone: effectiveTone)
                         : NagMessages.repeatingBody(title: task.title, tier: tier, tone: effectiveTone),
                     category: category,
-                    timeSensitive: task.style.breakThroughFocus
+                    timeSensitive: task.style.breakThroughFocus,
+                    filterCriteria: filterCriteria
                 ))
                 if let tightening = escalation.nextTightening(base: base, overdue: overdue) {
                     considerWake(task.startAt.addingTimeInterval(tightening))
@@ -164,7 +212,23 @@ public struct NagPlanner: Sendable {
             }
 
             considerWake(start)
-            for (date, number) in fireDates(for: task, from: start, base: base, checkIn: checkIn, quietHours: quietHours, now: now, until: until) {
+            let dates: [(date: Date, number: Int)]
+            if let handoff {
+                dates = handoffFireDates(
+                    for: task,
+                    from: start,
+                    base: base,
+                    checkIn: checkIn,
+                    handoffUntil: handoff,
+                    resumesRepeating: start <= now && allowRepeating && !quietNow,
+                    quietHours: quietHours,
+                    now: now,
+                    until: until
+                )
+            } else {
+                dates = fireDates(for: task, from: start, base: base, checkIn: checkIn, quietHours: quietHours, now: now, until: until)
+            }
+            for (date, number) in dates {
                 let overdue = date.timeIntervalSince(task.startAt)
                 oneOffs.append((date, PlannedNotification(
                     identifier: "\(prefix)\(Int(date.timeIntervalSince1970))|\(contentKey)",
@@ -186,12 +250,13 @@ public struct NagPlanner: Sendable {
                             tone: effectiveTone
                         ),
                     category: category,
-                    timeSensitive: task.style.breakThroughFocus
+                    timeSensitive: task.style.breakThroughFocus,
+                    filterCriteria: filterCriteria
                 )))
             }
         }
 
-        if quietNow, tasks.contains(where: { $0.isNagging(at: now) }) {
+        if quietNow, tasks.contains(where: { focusFilter.allows($0.style) && $0.isNagging(at: now) }) {
             considerWake(quietHours.nextAllowed(after: now, calendar: calendar))
         }
 
@@ -200,8 +265,67 @@ public struct NagPlanner: Sendable {
         return NagPlan(
             notifications: repeating + oneOffs.prefix(budget).map(\.notification),
             nextWake: wake,
-            outstandingCount: tasks.filter { $0.isOutstanding(at: now) }.count
+            outstandingCount: outstandingCount
         )
+    }
+
+    /// Fire dates while another device has the nag: one-offs every `DeviceHandoff.reducedInterval` from
+    /// `start` up to `handoffUntil`, then the usual curve. Both parts stay anchored on `start` so
+    /// re-planning keeps the same dates.
+    ///
+    /// A nag that's already due would normally get a repeating notification. Here it gets one-offs from
+    /// `handoffUntil` on instead, stepping along its escalation from that point. They keep it nagging at
+    /// full pace if the wake-up at `handoffUntil` that brings repeating back comes late.
+    func handoffFireDates(
+        for task: NagTask,
+        from start: Date,
+        base: TimeInterval,
+        checkIn: Bool,
+        handoffUntil: Date,
+        resumesRepeating: Bool,
+        quietHours: QuietHours,
+        now: Date,
+        until: Date
+    ) -> [(date: Date, number: Int)] {
+        var result: [(date: Date, number: Int)] = []
+        func append(_ date: Date, _ number: Int) {
+            if date > now, date <= until, result.last.map({ $0.date < date }) ?? true, result.count < maxPending {
+                result.append((date, number))
+            }
+        }
+
+        let reduced = max(DeviceHandoff.reducedInterval, base)
+        // Start from the last step at or before `now`, so long-overdue nags don't loop from their start.
+        var step = max(0, (now.timeIntervalSince(start) / reduced).rounded(.down))
+        var number = 0
+        while result.count < maxPending {
+            let next = start.addingTimeInterval(step * reduced)
+            guard next < handoffUntil, next <= until else { break }
+            step += 1
+            number = Int(step)
+            let fire = quietHours.nextAllowed(after: next, calendar: calendar)
+            if fire < handoffUntil { append(fire, number) }
+        }
+
+        let escalation = checkIn ? Escalation.steady : task.style.escalation
+        if resumesRepeating {
+            var next = handoffUntil
+            var number = max(2, number + 1)
+            var iterations = 0
+            while next <= until, result.count < maxPending, iterations < 20_000 {
+                iterations += 1
+                let fire = quietHours.nextAllowed(after: next, calendar: calendar)
+                append(fire, number)
+                number += 1
+                next = fire.addingTimeInterval(escalation.interval(base: base, overdue: fire.timeIntervalSince(task.startAt)))
+            }
+        } else {
+            for date in fireDates(for: task, from: start, base: base, checkIn: checkIn, quietHours: quietHours, now: now, until: until)
+            where date.date >= handoffUntil {
+                append(date.date, date.number)
+            }
+        }
+        return result
     }
 
     /// Fire dates after `now`, following the escalation curve from `start`. Anchored on `start` rather than

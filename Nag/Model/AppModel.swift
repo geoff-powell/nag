@@ -21,6 +21,7 @@ final class AppModel {
     @ObservationIgnored private var changeObservation: SharedStore.ChangeObservation?
     @ObservationIgnored private var cloudSync: CloudTaskSync?
     @ObservationIgnored private var quietHoursSync: QuietHoursSync?
+    @ObservationIgnored private var heartbeatSync: DeviceHeartbeatSync?
     @ObservationIgnored private var buddySharedSync: BuddySharedSync?
     /// Accountability buddy. `nil` in UI tests, which must never touch iCloud.
     @ObservationIgnored private(set) var buddy: BuddyController?
@@ -61,6 +62,15 @@ final class AppModel {
         }
         quietHoursSync = quietHours
         quietHours.start()
+        // A Mac starting or stopping use re-plans, so the iPhone eases off or picks the nag back up.
+        let heartbeat = DeviceHeartbeatSync(platform: .iPhone, store: store) { [weak self] in
+            Task { @MainActor in
+                self?.reload()
+                self?.sync()
+            }
+        }
+        heartbeatSync = heartbeat
+        heartbeat.start()
         let buddyShared = BuddySharedSync(store: store) { [weak self] in
             Task { @MainActor in self?.reload() }
         }
@@ -79,6 +89,7 @@ final class AppModel {
         reload()
         cloudSync?.reconcile()
         quietHoursSync?.reconcile()
+        heartbeatSync?.reconcile()
         buddySharedSync?.reconcile()
         sync()
         Task { await refreshPermissions() }
@@ -183,6 +194,13 @@ final class AppModel {
         !state.isTaskRequiredByEngagedLock(id)
     }
 
+    func setTaskArchived(_ id: UUID, archived: Bool) {
+        update { $0.setTaskArchived(id, archived: archived, at: .now) }
+        if state.task(id)?.isArchived == true {
+            NotificationSync.removeDeliveredUndoFollowUp(taskID: id)
+        }
+    }
+
     func deleteTask(_ id: UUID) {
         guard canDeleteTask(id) else { return }
         update { $0.deleteTask(id, at: .now) }
@@ -196,7 +214,7 @@ final class AppModel {
     /// Marks a nag done if `fingerprint` matches its key. Returns false for the wrong tag or code.
     @discardableResult
     func complete(_ id: UUID, scannedFingerprint fingerprint: String) -> Bool {
-        guard let task = state.task(id) else { return false }
+        guard let task = state.task(id), !task.isArchived else { return false }
         if let key = proofKey(for: task), key.fingerprint != fingerprint { return false }
         // The key was verified here. NagActions has no scanned-key escape hatch so callers outside
         // the app can never bypass proof requirements.
@@ -228,7 +246,7 @@ final class AppModel {
     }
 
     func clearFinished() {
-        let finished = state.tasks.filter { $0.isFinished && canDeleteTask($0.id) }.map(\.id)
+        let finished = state.tasks.filter { !$0.isArchived && $0.isFinished && canDeleteTask($0.id) }.map(\.id)
         guard !finished.isEmpty else { return }
         update { state in
             for id in finished { state.deleteTask(id, at: .now) }
@@ -314,6 +332,7 @@ final class AppModel {
                 var updated = profile
                 updated.status = state.profiles[index].status
                 updated.lastScheduledLockAt = state.profiles[index].lastScheduledLockAt
+                updated.lastFocusLockAt = state.profiles[index].lastFocusLockAt
                 updated.autoLockPausedUntil = state.profiles[index].autoLockPausedUntil
                 state.profiles[index] = updated
             } else {
@@ -394,6 +413,25 @@ final class AppModel {
     func deleteKey(_ id: UUID) {
         guard canDeleteKey(id) else { return }
         update { $0.keys.removeAll { $0.id == id } }
+    }
+
+    // MARK: - Focus
+
+    /// Applies the Focus filter the system sent (or clears it when the Focus ends), then waits for shields
+    /// and notifications to catch up before iOS suspends Nag again.
+    func applyFocusFilter(lockIDs: Set<UUID>, minimumUrgency: FocusUrgency, quietHours: Bool) async {
+        reload()
+        let calendar = calendar
+        update { state in
+            state.applyFocusFilter(
+                lockIDs: lockIDs,
+                minimumUrgency: minimumUrgency,
+                quietHours: quietHours,
+                now: .now,
+                calendar: calendar
+            )
+        }
+        await waitForSync()
     }
 
     // MARK: - Settings
