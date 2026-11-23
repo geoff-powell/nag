@@ -159,6 +159,13 @@ final class AppModel {
         !state.isTaskRequiredByEngagedLock(id)
     }
 
+    func setTaskArchived(_ id: UUID, archived: Bool) {
+        update { $0.setTaskArchived(id, archived: archived, at: .now) }
+        if state.task(id)?.isArchived == true {
+            NotificationSync.removeDeliveredUndoFollowUp(taskID: id)
+        }
+    }
+
     func deleteTask(_ id: UUID) {
         guard canDeleteTask(id) else { return }
         update { $0.deleteTask(id, at: .now) }
@@ -172,7 +179,7 @@ final class AppModel {
     /// Marks a nag done if `fingerprint` matches its key. Returns false for the wrong tag or code.
     @discardableResult
     func complete(_ id: UUID, scannedFingerprint fingerprint: String) -> Bool {
-        guard let task = state.task(id) else { return false }
+        guard let task = state.task(id), !task.isArchived else { return false }
         if let key = proofKey(for: task), key.fingerprint != fingerprint { return false }
         // The key was verified here. NagActions has no scanned-key escape hatch so callers outside
         // the app can never bypass proof requirements.
@@ -204,7 +211,7 @@ final class AppModel {
     }
 
     func clearFinished() {
-        let finished = state.tasks.filter { $0.isFinished && canDeleteTask($0.id) }.map(\.id)
+        let finished = state.tasks.filter { !$0.isArchived && $0.isFinished && canDeleteTask($0.id) }.map(\.id)
         guard !finished.isEmpty else { return }
         update { state in
             for id in finished { state.deleteTask(id, at: .now) }

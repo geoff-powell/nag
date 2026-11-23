@@ -78,6 +78,11 @@ struct NagListView: View {
                     }
                 }
             }
+            if !groups.archived.isEmpty {
+                Section("Archived") {
+                    ForEach(groups.archived) { row($0, now: now) }
+                }
+            }
         }
         .overlay {
             if model.state.tasks.isEmpty {
@@ -128,17 +133,26 @@ struct NagListView: View {
                 .tint(.blue)
             }
         }
-        .swipeActions(edge: .trailing) {
+        .swipeActions(edge: .trailing, allowsFullSwipe: task.canSnooze(at: now) || (task.isFinished && !task.isArchived)) {
             if task.canSnooze(at: now) {
                 Button { snoozeTaskID = task.id } label: {
                     Label("Snooze", systemImage: "zzz")
                 }
                 .tint(.indigo)
             }
-            if task.isFinished {
+            if task.isFinished, !task.isArchived {
                 Button { reopen(task) } label: {
                     Label("Reopen", systemImage: "arrow.uturn.backward")
                 }
+            }
+            if task.isArchived || model.canDeleteTask(task.id) {
+                Button {
+                    afterSwipeCloses { model.setTaskArchived(task.id, archived: !task.isArchived) }
+                } label: {
+                    Label(task.isArchived ? "Restore" : "Archive",
+                          systemImage: task.isArchived ? "arrow.uturn.backward" : "archivebox")
+                }
+                .tint(.gray)
             }
         }
         .listRowBackground(router.focusedTask == task.id ? Color.orange.opacity(0.15) : nil)
@@ -247,10 +261,13 @@ struct NagGroups {
     var now: [NagTask] = []
     var later: [NagTask] = []
     var done: [NagTask] = []
+    var archived: [NagTask] = []
 
     init(tasks: [NagTask], now date: Date, calendar: Calendar) {
         for task in tasks {
-            if task.isOutstanding(at: date) {
+            if task.isArchived {
+                archived.append(task)
+            } else if task.isOutstanding(at: date) {
                 now.append(task)
             } else if task.isFinished || task.lastCompletedAt.map({ calendar.isDate($0, inSameDayAs: date) }) == true {
                 done.append(task)
@@ -261,7 +278,7 @@ struct NagGroups {
         now.sort { $0.startAt < $1.startAt }
         later.sort { $0.startAt < $1.startAt }
         done.sort { ($0.lastCompletedAt ?? .distantPast) > ($1.lastCompletedAt ?? .distantPast) }
-        signature = [now, later, done].map { section in
+        signature = [now, later, done, archived].map { section in
             section.map { "\($0.id)|\($0.isSnoozed(at: date))|\($0.isFinished)" }
         }
     }
