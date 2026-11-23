@@ -11,14 +11,22 @@ final class MacPresence {
     private(set) var asleep = false
     var onChange: (() -> Void)?
 
+    private static let screenLockedNotification = Notification.Name("com.apple.screenIsLocked")
+    private static let screenUnlockedNotification = Notification.Name("com.apple.screenIsUnlocked")
     private var observers: [(NotificationCenter, any NSObjectProtocol)] = []
 
     func start() {
         guard observers.isEmpty else { return }
         let distributed = DistributedNotificationCenter.default()
         let workspace = NSWorkspace.shared.notificationCenter
-        observe(distributed, "com.apple.screenIsLocked") { $0.screenLocked = true }
-        observe(distributed, "com.apple.screenIsUnlocked") { $0.screenLocked = false }
+        distributed.addObserver(
+            self, selector: #selector(screenLockChanged(_:)), name: Self.screenLockedNotification,
+            object: nil, suspensionBehavior: .deliverImmediately
+        )
+        distributed.addObserver(
+            self, selector: #selector(screenLockChanged(_:)), name: Self.screenUnlockedNotification,
+            object: nil, suspensionBehavior: .deliverImmediately
+        )
         observe(workspace, NSWorkspace.willSleepNotification.rawValue) { $0.asleep = true }
         observe(workspace, NSWorkspace.didWakeNotification.rawValue) { $0.asleep = false }
         observe(workspace, NSWorkspace.screensDidSleepNotification.rawValue) { $0.asleep = true }
@@ -33,6 +41,11 @@ final class MacPresence {
         // ~0 is kCGAnyInputEventType.
         guard let anyInput = CGEventType(rawValue: ~0) else { return .infinity }
         return CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyInput)
+    }
+
+    @objc private func screenLockChanged(_ notification: Notification) {
+        screenLocked = notification.name == Self.screenLockedNotification
+        onChange?()
     }
 
     private func observe(_ center: NotificationCenter, _ name: String, _ update: @escaping @MainActor @Sendable (MacPresence) -> Void) {

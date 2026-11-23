@@ -16,6 +16,10 @@ Apple apps; iCloud sync is not available on Windows.
 - **iPhone and Mac.** The iPhone uses Screen Time to block apps. The Mac app lives in the menu bar,
   hides or quits blocked apps, and keeps a reminder panel on screen while anything is due. Nags sync
   between them through iCloud.
+- **Live Activities.** On iPhone, an overdue nag and an active lock can appear on the Lock Screen and
+  Dynamic Island. Enable Live Activity in Nag's Settings if it is off, and allow Live Activities in
+  iPhone Settings. Open Nag to start or refresh them: activities cannot start while the app is closed,
+  and they end after eight hours.
 
 ## Setup
 

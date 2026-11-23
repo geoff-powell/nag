@@ -57,6 +57,13 @@ struct MacSettingsView: View {
             }
 
             Section {
+                LabeledContent("Focus filter", value: focusFilterLabel)
+            } footer: {
+                Text("In System Settings > Focus, pick a Focus and add a Nag filter to turn on locks, quiet less urgent nags or switch quiet hours on while it's active.")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 Picker("Nag tone", selection: settingBinding(\.nagTone)) {
                     ForEach(NagTone.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
@@ -87,6 +94,13 @@ struct MacSettingsView: View {
         .formStyle(.grouped)
         .navigationTitle("Settings")
         .task { await model.refreshPermissions() }
+    }
+
+    private var focusFilterLabel: String {
+        let filter = model.state.settings.focusFilter
+        guard filter.isActive else { return "Not active" }
+        let names = model.state.profiles.filter { filter.lockIDs.contains($0.id) }.map(\.name)
+        return FocusFilterSummary.make(lockNames: names, minimumUrgency: filter.minimumUrgency, quietHours: filter.quietHours).title
     }
 
     private var notificationLabel: String {

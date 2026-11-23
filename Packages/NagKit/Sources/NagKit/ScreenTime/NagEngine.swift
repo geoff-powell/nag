@@ -81,6 +81,7 @@ public enum NagEngine {
         let plan = planner.plan(
             tasks: state.tasks,
             quietHours: state.settings.quietHours,
+            focusFilter: state.settings.focusFilter,
             tone: state.settings.nagTone,
             handoffUntil: state.settings.deviceHandoff
                 ? DeviceHandoff.handoffUntil(heartbeats: state.devices, now: now)
@@ -94,6 +95,9 @@ public enum NagEngine {
             }
         }
         await NotificationSync.apply(plan, tasks: state.tasks, now: now)
+        if #available(iOS 26, *), Bundle.main.bundleURL.pathExtension == "app" {
+            await NagAlarmSync.apply(state: store.load(), now: .now, calendar: calendar)
+        }
 
         for profile in autoUnlocked {
             await NotificationSync.alert(

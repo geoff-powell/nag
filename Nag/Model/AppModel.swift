@@ -67,7 +67,6 @@ final class AppModel {
         }
         heartbeatSync = heartbeat
         heartbeat.start()
-        heartbeat.publish(.active)
         sync()
     }
 
@@ -76,13 +75,8 @@ final class AppModel {
         cloudSync?.reconcile()
         quietHoursSync?.reconcile()
         heartbeatSync?.reconcile()
-        heartbeatSync?.publish(.active)
         sync()
         Task { await refreshPermissions() }
-    }
-
-    func enteredBackground() {
-        heartbeatSync?.publish(.idle)
     }
 
     func reload() {
@@ -307,6 +301,7 @@ final class AppModel {
                 var updated = profile
                 updated.status = state.profiles[index].status
                 updated.lastScheduledLockAt = state.profiles[index].lastScheduledLockAt
+                updated.lastFocusLockAt = state.profiles[index].lastFocusLockAt
                 updated.autoLockPausedUntil = state.profiles[index].autoLockPausedUntil
                 state.profiles[index] = updated
             } else {
@@ -387,6 +382,25 @@ final class AppModel {
     func deleteKey(_ id: UUID) {
         guard canDeleteKey(id) else { return }
         update { $0.keys.removeAll { $0.id == id } }
+    }
+
+    // MARK: - Focus
+
+    /// Applies the Focus filter the system sent (or clears it when the Focus ends), then waits for shields
+    /// and notifications to catch up before iOS suspends Nag again.
+    func applyFocusFilter(lockIDs: Set<UUID>, minimumUrgency: FocusUrgency, quietHours: Bool) async {
+        reload()
+        let calendar = calendar
+        update { state in
+            state.applyFocusFilter(
+                lockIDs: lockIDs,
+                minimumUrgency: minimumUrgency,
+                quietHours: quietHours,
+                now: .now,
+                calendar: calendar
+            )
+        }
+        await waitForSync()
     }
 
     // MARK: - Settings

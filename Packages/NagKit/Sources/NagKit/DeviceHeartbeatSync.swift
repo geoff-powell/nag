@@ -61,10 +61,11 @@ public final class DeviceHeartbeatSync: @unchecked Sendable {
     /// Copies iCloud's heartbeats into the store, and rewrites this device's entry if a crossing write
     /// from another device dropped it.
     public func reconcile(now: Date = .now) {
-        guard let remote = readRemote() else { return }
+        guard var remote = readRemote() else { return }
         if let lastPublished, remote[deviceID] != lastPublished,
            lastPublished.activity == .idle || lastPublished.activeUntil > now {
-            write(DeviceHandoff.merging(lastPublished, into: remote, now: now))
+            remote = DeviceHandoff.merging(lastPublished, into: remote, now: now)
+            write(remote)
         }
         mirror(remote)
     }

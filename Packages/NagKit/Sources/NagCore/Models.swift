@@ -78,6 +78,12 @@ public enum Escalation: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum NagAlarmMode: String, Codable, Hashable, Sendable {
+    case off
+    case atStart
+    case atTopTier
+}
+
 public struct NagStyle: Codable, Hashable, Sendable {
     public var intervalMinutes: Int
     public var escalation: Escalation
@@ -85,6 +91,7 @@ public struct NagStyle: Codable, Hashable, Sendable {
     /// `nil` allows unlimited snoozes.
     public var maxSnoozes: Int?
     /// Deliver nags as Time Sensitive so they can break through Focus.
+    public var alarmMode: NagAlarmMode
     public var breakThroughFocus: Bool
     /// How long a nag stays quiet after it is started.
     public var workMinutes: Int
@@ -97,6 +104,7 @@ public struct NagStyle: Codable, Hashable, Sendable {
         snoozeMinutes: Int = 10,
         maxSnoozes: Int? = 3,
         breakThroughFocus: Bool = true,
+        alarmMode: NagAlarmMode = .off,
         workMinutes: Int = 30,
         tone: NagTone? = nil
     ) {
@@ -105,12 +113,13 @@ public struct NagStyle: Codable, Hashable, Sendable {
         self.snoozeMinutes = snoozeMinutes
         self.maxSnoozes = maxSnoozes
         self.breakThroughFocus = breakThroughFocus
+        self.alarmMode = alarmMode
         self.workMinutes = workMinutes
         self.tone = tone
     }
 
     private enum CodingKeys: String, CodingKey {
-        case intervalMinutes, escalation, snoozeMinutes, maxSnoozes, breakThroughFocus, workMinutes, tone
+        case intervalMinutes, escalation, snoozeMinutes, maxSnoozes, breakThroughFocus, workMinutes, tone, alarmMode
     }
 
     /// Every field has its original default so styles saved by older versions still load.
@@ -120,6 +129,7 @@ public struct NagStyle: Codable, Hashable, Sendable {
         escalation = try c.decodeIfPresent(Escalation.self, forKey: .escalation) ?? .gentle
         snoozeMinutes = try c.decodeIfPresent(Int.self, forKey: .snoozeMinutes) ?? 10
         maxSnoozes = try c.decodeIfPresent(Int.self, forKey: .maxSnoozes)
+        alarmMode = try c.decodeIfPresent(NagAlarmMode.self, forKey: .alarmMode) ?? .off
         breakThroughFocus = try c.decodeIfPresent(Bool.self, forKey: .breakThroughFocus) ?? true
         workMinutes = min(max(try c.decodeIfPresent(Int.self, forKey: .workMinutes) ?? 30, 1), 1440)
         tone = (try? c.decodeIfPresent(String.self, forKey: .tone))
@@ -132,6 +142,7 @@ public struct NagStyle: Codable, Hashable, Sendable {
         try c.encode(escalation, forKey: .escalation)
         try c.encode(snoozeMinutes, forKey: .snoozeMinutes)
         try c.encodeIfPresent(maxSnoozes, forKey: .maxSnoozes)
+        if alarmMode != .off { try c.encode(alarmMode, forKey: .alarmMode) }
         try c.encode(breakThroughFocus, forKey: .breakThroughFocus)
         try c.encode(workMinutes, forKey: .workMinutes)
         try c.encodeIfPresent(tone?.rawValue, forKey: .tone)
@@ -412,6 +423,12 @@ public enum LockTrigger: String, Codable, Sendable {
     case manual
     case schedule
     case nags
+    case focus
+
+    public init(from decoder: any Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(String.self)
+        self = LockTrigger(rawValue: rawValue) ?? .manual
+    }
 }
 
 public struct LockSession: Codable, Hashable, Sendable {
@@ -459,6 +476,8 @@ public struct LockProfile: Codable, Hashable, Identifiable, Sendable {
     public var status: LockStatus
     /// Start of the last schedule window that switched this lock on.
     public var lastScheduledLockAt: Date?
+    /// Start of the last Focus filter activation that switched this lock on.
+    public var lastFocusLockAt: Date?
     /// After an emergency unlock, due nags don't switch the lock back on until this time.
     public var autoLockPausedUntil: Date?
 
@@ -490,6 +509,7 @@ public struct LockProfile: Codable, Hashable, Identifiable, Sendable {
         self.message = message
         self.status = .off
         self.lastScheduledLockAt = nil
+        self.lastFocusLockAt = nil
         self.autoLockPausedUntil = nil
     }
 }
@@ -544,8 +564,10 @@ public struct AppSettings: Codable, Hashable, Sendable {
     public var screenTimeApproved: Bool
     /// iPhone: ease off while a Mac is in use. Mac: take over while in use. Each device decides for itself.
     public var deviceHandoff: Bool
-    /// Live Activities are opt-in: off until the user turns them on in Settings.
+    /// Whether eligible nags and locks appear as Live Activities.
     public var liveActivitiesEnabled: Bool
+    /// Active Focus filter on this device.
+    public var focusFilter: FocusFilter
 
     public init(
         quietHours: QuietHours = QuietHours(),
@@ -556,7 +578,8 @@ public struct AppSettings: Codable, Hashable, Sendable {
         hasOnboarded: Bool = false,
         screenTimeApproved: Bool = false,
         deviceHandoff: Bool = true,
-        liveActivitiesEnabled: Bool = false
+        liveActivitiesEnabled: Bool = true,
+        focusFilter: FocusFilter = FocusFilter()
     ) {
         self.quietHours = quietHours
         self.quietHoursUpdatedAt = quietHoursUpdatedAt
@@ -567,12 +590,12 @@ public struct AppSettings: Codable, Hashable, Sendable {
         self.screenTimeApproved = screenTimeApproved
         self.deviceHandoff = deviceHandoff
         self.liveActivitiesEnabled = liveActivitiesEnabled
+        self.focusFilter = focusFilter
     }
 
     private enum CodingKeys: String, CodingKey {
         case quietHours, quietHoursUpdatedAt, nagTone, emergencyUnlocksPerMonth, emergencyUnlocksUsed, hasOnboarded, screenTimeApproved
-        case deviceHandoff
-        case liveActivitiesEnabled
+        case deviceHandoff, liveActivitiesEnabled, focusFilter
     }
 
     public init(from decoder: any Decoder) throws {
@@ -586,6 +609,7 @@ public struct AppSettings: Codable, Hashable, Sendable {
         screenTimeApproved = try c.decodeIfPresent(Bool.self, forKey: .screenTimeApproved) ?? false
         deviceHandoff = try c.decodeIfPresent(Bool.self, forKey: .deviceHandoff) ?? true
         liveActivitiesEnabled = try c.decodeIfPresent(Bool.self, forKey: .liveActivitiesEnabled) ?? false
+        focusFilter = try c.decodeIfPresent(FocusFilter.self, forKey: .focusFilter) ?? FocusFilter()
     }
 
     public mutating func setQuietHours(_ new: QuietHours, at now: Date) {

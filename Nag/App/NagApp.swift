@@ -1,3 +1,4 @@
+import AppIntents
 import BackgroundTasks
 import NagKit
 import SwiftUI
@@ -19,9 +20,7 @@ struct NagApp: App {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active: appDelegate.model.becameActive()
-            case .background:
-                appDelegate.model.enteredBackground()
-                BackgroundRefresh.schedule()
+            case .background: BackgroundRefresh.schedule()
             default: break
             }
         }
@@ -42,4 +41,8 @@ enum BackgroundRefresh {
         request.earliestBeginDate = .now.addingTimeInterval(20 * 60)
         try? BGTaskScheduler.shared.submit(request)
     }
+}
+
+struct NagAppIntents: AppIntentsPackage {
+    static let includedPackages: [any AppIntentsPackage.Type] = [NagAlarmIntents.self]
 }
