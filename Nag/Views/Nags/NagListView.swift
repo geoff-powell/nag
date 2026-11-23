@@ -8,6 +8,7 @@ struct NagListView: View {
     @State private var feedbackTick = 0
     @State private var undo: (taskID: UUID, deadline: Date)?
     @State private var snoozeTaskID: UUID?
+    @State private var showingReview = false
 
     var body: some View {
         NavigationStack {
@@ -18,12 +19,25 @@ struct NagListView: View {
             }
             .navigationTitle("Nags")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Weekly review", systemImage: "chart.bar.xaxis") { showingReview = true }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button("New nag", systemImage: "plus") { editor = .new }
                 }
             }
             .sheet(item: $editor) { item in
                 TaskEditorView(task: item.task)
+            }
+            .sheet(isPresented: $showingReview) {
+                NavigationStack {
+                    WeeklyReviewView()
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { showingReview = false }
+                            }
+                        }
+                }
             }
         }
         .overlay(alignment: .bottom) {

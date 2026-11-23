@@ -225,7 +225,9 @@ extension NagTask {
         isOutstanding(at: now) && (snoozesLeft ?? 1) > 0
     }
 
-    public mutating func complete(at now: Date, calendar: Calendar) {
+    /// Marks the current occurrence done. `keyScanned` says the nag's key was scanned to prove it, which
+    /// only the app can check; it's kept for the completion history.
+    public mutating func complete(at now: Date, calendar: Calendar, keyScanned: Bool = false) {
         guard !isArchived else { return }
         let undo = CompletionUndo(
             startAt: startAt,
@@ -234,7 +236,8 @@ extension NagTask {
             lastCompletedAt: lastCompletedAt,
             completedAt: completedAt,
             startedAt: startedAt,
-            completedAtMoment: now
+            completedAtMoment: now,
+            keyScanned: keyScanned
         )
         lastCompletedAt = now
         snoozedUntil = nil

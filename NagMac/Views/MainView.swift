@@ -10,6 +10,7 @@ struct MainView: View {
             List(selection: $model.section) {
                 Label("Nags", systemImage: "bell.badge.fill").tag(MacModel.Section.nags)
                 Label("Locks", systemImage: "lock.fill").tag(MacModel.Section.locks)
+                Label("Weekly review", systemImage: "chart.bar.xaxis").tag(MacModel.Section.review)
                 Label("Settings", systemImage: "gearshape").tag(MacModel.Section.settings)
             }
             .navigationSplitViewColumnWidth(min: 160, ideal: 180)
@@ -17,6 +18,7 @@ struct MainView: View {
             switch model.section {
             case .nags: MacNagsView()
             case .locks: MacLocksView()
+            case .review: MacReviewView()
             case .settings: MacSettingsView()
             }
         }
