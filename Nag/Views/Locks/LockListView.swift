@@ -146,6 +146,7 @@ private struct LockRow: View {
         }
         if let schedule = profile.schedule { parts.append(schedule.label) }
         if profile.lockWhileNagsDue { parts.append("Locks while nags are due") }
+        if profile.session?.trigger == .focus { parts.append("On for your Focus. Switches off when it ends.") }
         return parts.joined(separator: "\n")
     }
 }

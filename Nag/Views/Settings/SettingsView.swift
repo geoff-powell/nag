@@ -49,6 +49,18 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Let my Mac take over", isOn: settingBinding(\.deviceHandoff))
+                } footer: {
+                    Text(DeviceHandoff.explanation)
+                }
+
+                Section {
+                    LabeledContent("Focus filter", value: focusFilterLabel)
+                } footer: {
+                    Text("In Settings > Focus, pick a Focus and add a Nag filter to turn on locks, quiet less urgent nags or switch quiet hours on while it's active.")
+                }
+
+                Section {
                     Picker("Nag tone", selection: settingBinding(\.nagTone)) {
                         ForEach(NagTone.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
@@ -60,7 +72,7 @@ struct SettingsView: View {
                     Toggle("Live Activity", isOn: liveActivitiesBinding)
                 } footer: {
                     if systemLiveActivitiesEnabled {
-                        Text("Keeps your oldest overdue nag, and any lock that's on, on the Lock Screen and in the Dynamic Island. Activities end after 8 hours.")
+                        Text("Shows your oldest overdue nag and one active lock on the Lock Screen and Dynamic Island. Open Nag to start or refresh activities; they end after 8 hours.")
                     } else {
                         Text("Live Activities are disabled for Nag. Enable them in iOS Settings to use this feature.")
                     }
@@ -150,6 +162,13 @@ struct SettingsView: View {
         let version = info?["CFBundleShortVersionString"] as? String ?? "?"
         let build = info?["CFBundleVersion"] as? String ?? "?"
         return "Version \(version) (\(build))"
+    }
+
+    private var focusFilterLabel: String {
+        let filter = model.state.settings.focusFilter
+        guard filter.isActive else { return "Not active" }
+        let names = model.state.profiles.filter { filter.lockIDs.contains($0.id) }.map(\.name)
+        return FocusFilterSummary.make(lockNames: names, minimumUrgency: filter.minimumUrgency, quietHours: filter.quietHours).title
     }
 
     private var notificationLabel: String {

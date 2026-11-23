@@ -178,6 +178,7 @@ extension NagState {
         task.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
         task.updatedAt = now
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+            task.archiveStatus = tasks[index].archiveStatus
             if tasks[index].startAt != task.startAt {
                 task.snoozedUntil = nil
                 task.snoozeCount = 0
