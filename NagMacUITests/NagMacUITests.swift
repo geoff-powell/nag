@@ -131,7 +131,8 @@ final class NagMacUITests: XCTestCase {
         XCTAssertTrue(window.waitForExistence(timeout: 5), "The main window didn't open")
         let field = app.textFields["Add a nag and press Return"].firstMatch
         if field.exists {
-            app.typeKey(.escape, modifierFlags: [])
+            // Opening the main window can take keyboard focus from the menu bar extra.
+            statusItem.click()
             XCTAssertTrue(waitForDisappearance(field), "The menu bar extra didn't close")
         }
         window.click()
