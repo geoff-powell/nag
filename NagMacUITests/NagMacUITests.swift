@@ -69,7 +69,8 @@ final class NagMacUITests: XCTestCase {
     }
 
     func testNewNagEditorSavesANag() throws {
-        launch()
+        // Start without an overdue nag so the floating panel cannot cover the editor toolbar.
+        launch(scenario: "empty")
         let window = openMainWindow()
         window.toolbars.buttons["New nag"].firstMatch.click()
         // The title is the editor's first field. Form rows don't expose their prompts as labels.
@@ -80,7 +81,7 @@ final class NagMacUITests: XCTestCase {
         title.click()
         title.typeText("Call the dentist")
         app.buttons["Save"].firstMatch.click()
-        XCTAssertTrue(app.staticTexts["Call the dentist"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(window.staticTexts["Call the dentist"].firstMatch.waitForExistence(timeout: 5))
     }
 
     func testEachSectionOpens() throws {
