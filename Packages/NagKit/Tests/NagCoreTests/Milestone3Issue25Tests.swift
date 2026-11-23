@@ -205,6 +205,27 @@ import Testing
         #expect(state.profiles[0].status == .off)
     }
 
+    @Test func placeAndFocusKeepTheLockUntilBothEnd() {
+        let lock = placeLock(at: home)
+        var state = state(profiles: [lock])
+        let arrival = Fixture.date(28, 9)
+        state.applyPlaceObservation(placeID: home.id, inside: true, now: arrival)
+        LockMaintenance.run(&state, now: arrival, calendar: calendar)
+        state.applyFocusFilter(lockIDs: [lock.id], now: Fixture.date(28, 10), calendar: calendar)
+        let departure = Fixture.date(28, 11)
+        state.applyPlaceObservation(placeID: home.id, inside: false, now: departure)
+        LockMaintenance.run(&state, now: departure, calendar: calendar)
+        #expect(state.profiles[0].session?.trigger == .focus)
+        #expect(state.profiles[0].session?.startedAt == arrival)
+
+        let returnTime = Fixture.date(28, 12)
+        state.applyPlaceObservation(placeID: home.id, inside: true, now: returnTime)
+        LockMaintenance.run(&state, now: returnTime, calendar: calendar)
+        state.applyFocusFilter(now: Fixture.date(28, 13), calendar: calendar)
+        #expect(state.profiles[0].session?.trigger == .place)
+        #expect(state.profiles[0].session?.startedAt == arrival)
+    }
+
     @Test func placeLockEngagesWhenAlreadyThere() {
         var state = state(profiles: [placeLock(at: home)], outsideHome: false)
         state.applyPlaceObservation(placeID: home.id, inside: true, now: Fixture.date(28, 9))

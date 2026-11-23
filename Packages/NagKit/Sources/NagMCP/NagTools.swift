@@ -99,13 +99,13 @@ public struct NagTools: Sendable {
             [
                 "name": "list_nags",
                 "title": "List nags",
-                "description": "Lists the user's nags with their status: due, snoozed, upcoming, done_today or finished.",
+                "description": "Lists the user's nags with their status: due, snoozed, upcoming, done_today, finished or archived.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
                         "status": [
                             "type": "string",
-                            "enum": ["open", "due", "upcoming", "done", "all"],
+                            "enum": ["open", "due", "upcoming", "done", "archived", "all"],
                             "description": "open (default) is everything not finished: due, snoozed and upcoming. done is finished or done today.",
                         ],
                         "source": ["type": "string", "description": "Only nags from this source."],
@@ -188,9 +188,13 @@ public struct NagTools: Sendable {
         onChange()
 
         let task = draft.task
-        let start = task.startAt <= now.addingTimeInterval(60)
-            ? "nagging now"
-            : "starting \(Self.timestamp(task.startAt, calendar: calendar))"
+        let start = if task.isArchived {
+            "archived"
+        } else if task.startAt <= now.addingTimeInterval(60) {
+            "nagging now"
+        } else {
+            "starting \(Self.timestamp(task.startAt, calendar: calendar))"
+        }
         let summary = "\(draft.isNew ? "Added" : "Updated") “\(task.title)”, \(start)."
         let nag = describe(task, now: now)
         return Self.success("\(summary)\n\(nag.prettyString())", structured: ["created": .bool(draft.isNew), "nag": nag])
@@ -204,8 +208,9 @@ public struct NagTools: Sendable {
         case "due": wanted = ["due", "snoozed"]
         case "upcoming": wanted = ["upcoming"]
         case "done": wanted = ["done_today", "finished"]
-        case "all": wanted = ["due", "snoozed", "upcoming", "done_today", "finished"]
-        default: return Self.failure("“\(filter)” isn't a status. Use open, due, upcoming, done or all.")
+        case "archived": wanted = ["archived"]
+        case "all": wanted = ["due", "snoozed", "upcoming", "done_today", "finished", "archived"]
+        default: return Self.failure("“\(filter)” isn't a status. Use open, due, upcoming, done, archived or all.")
         }
         let source = arguments["source"]?.stringValue
 
@@ -222,6 +227,7 @@ public struct NagTools: Sendable {
     private func complete(_ arguments: [String: JSONValue], clientName: String?) -> JSONValue {
         let now = clock()
         return mutate(arguments, clientName: clientName) { task in
+            if task.isArchived { return "“\(task.title)” is archived." }
             if task.proof.keyID != nil {
                 return "“\(task.title)” needs its key scanned on the user's iPhone to finish."
             }
@@ -289,6 +295,7 @@ public struct NagTools: Sendable {
     // MARK: - Output
 
     func status(of task: NagTask, now: Date) -> String {
+        if task.isArchived { return "archived" }
         if task.isFinished { return "finished" }
         if task.isOutstanding(at: now) { return task.isSnoozed(at: now) ? "snoozed" : "due" }
         if let done = task.lastCompletedAt, calendar.isDate(done, inSameDayAs: now) { return "done_today" }

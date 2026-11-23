@@ -179,10 +179,13 @@ struct MacNagGroups {
     var now: [NagTask] = []
     var later: [NagTask] = []
     var done: [NagTask] = []
+    var archived: [NagTask] = []
 
     init(tasks: [NagTask], now date: Date, calendar: Calendar) {
         for task in tasks {
-            if task.isOutstanding(at: date) {
+            if task.isArchived {
+                archived.append(task)
+            } else if task.isOutstanding(at: date) {
                 now.append(task)
             } else if task.isFinished || task.lastCompletedAt.map({ calendar.isDate($0, inSameDayAs: date) }) == true {
                 done.append(task)

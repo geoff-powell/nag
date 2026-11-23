@@ -16,6 +16,10 @@ Apple apps; iCloud sync is not available on Windows.
 - **iPhone and Mac.** The iPhone uses Screen Time to block apps. The Mac app lives in the menu bar,
   hides or quits blocked apps, and keeps a reminder panel on screen while anything is due. Nags sync
   between them through iCloud.
+- **Live Activities.** On iPhone, an overdue nag and an active lock can appear on the Lock Screen and
+  Dynamic Island. Enable Live Activity in Nag's Settings if it is off, and allow Live Activities in
+  iPhone Settings. Open Nag to start or refresh them: activities cannot start while the app is closed,
+  and they end after eight hours.
 
 ## Setup
 
@@ -217,6 +221,13 @@ hash is stored. Nag can print a fresh QR code for you, or use any barcode you al
 **Sync.** Only nags sync, through iCloud key-value storage. Locks and keys are specific to each device
 (app selections and NFC tags don't carry across). Edits merge last-writer-wins, except that a
 completion is never lost to an older edit from the other device.
+
+**Mac takes over at the desk.** While the Mac is in use (unlocked, awake, input in the last 5 minutes),
+it writes a heartbeat to iCloud saying it's active for the next 15 minutes, refreshed every 5. The
+iPhone plans sparse reminders (at most every 30 minutes) up to that moment and its usual escalation
+after it, so it's back to full nagging even if it never hears the Mac go idle. No heartbeat, an
+expired one, or a clock that looks wrong all mean full nagging. Either device can switch this off in
+Settings. The rules live in NagCore (`DeviceHandoff`, `NagPlanner`).
 
 **Places.** Optional. Save a place (Settings > Places) and a nag can start when you arrive at or leave
 it, once or every time, and a lock can switch on while you're there. Places, and whether you're at them,

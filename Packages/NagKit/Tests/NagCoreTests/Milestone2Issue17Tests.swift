@@ -174,8 +174,8 @@ import Testing
         #expect(NagActivityContent.dismissAt(start: now) == now.addingTimeInterval(8 * 60 * 60))
     }
 
-    @Test func liveActivitiesAreOffByDefault() {
-        #expect(!AppSettings().liveActivitiesEnabled)
+    @Test func liveActivitiesAreOnForNewSettings() {
+        #expect(AppSettings().liveActivitiesEnabled)
     }
 
     @Test func settingsDecodedFromJsonWithoutTheKeyDefaultToOff() throws {

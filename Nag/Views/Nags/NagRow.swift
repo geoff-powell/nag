@@ -87,22 +87,26 @@ struct NagRow: View {
     }
 
     private var checkState: String {
+        if task.isArchived { return "archived" }
         if isDoneForNow { return "done" }
         if task.isSnoozed(at: now) { return "snoozed" }
         return task.isOutstanding(at: now) ? "due" : "upcoming"
     }
 
     private var checkSymbol: String {
+        if task.isArchived { return "archivebox" }
         if isDone { return "checkmark.circle.fill" }
         return needsScan ? "wave.3.right.circle" : "circle"
     }
 
     private var checkColor: Color {
+        if task.isArchived { return .secondary }
         if isDone { return .green }
         return task.isOutstanding(at: now) ? .orange : .secondary
     }
 
     private var statusText: String {
+        if task.isArchived { return "Archived" }
         if task.isFinished, let done = task.completedAt {
             return "Done \(done.formatted(.relative(presentation: .named)))"
         }
@@ -141,6 +145,7 @@ struct NagRow: View {
     }
 
     private var statusSymbol: String {
+        if task.isArchived { return "archivebox" }
         if task.isSnoozed(at: now) { return "zzz" }
         if task.isStarted(at: now) { return "play.circle" }
         if task.isAwaitingPlace { return "mappin.and.ellipse" }

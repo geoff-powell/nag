@@ -14,6 +14,7 @@ struct MacNagsView: View {
                 section("Now", groups.now, now: now)
                 section("Coming up", groups.later, now: now)
                 section("Done", groups.done, now: now)
+                section("Archived", groups.archived, now: now)
             }
             .overlay {
                 if model.state.tasks.isEmpty {
@@ -28,7 +29,7 @@ struct MacNagsView: View {
                 }
             }
             // Rows slide between sections however they change: here, the menu bar, a notification or the iPhone.
-            .animation(.snappy(duration: 0.32), value: [groups.now, groups.later, groups.done].map { section in
+            .animation(.snappy(duration: 0.32), value: [groups.now, groups.later, groups.done, groups.archived].map { section in
                 section.map { "\($0.id)|\($0.isSnoozed(at: now))|\($0.isStarted(at: now))|\($0.isFinished)" }
             })
         }
@@ -36,7 +37,7 @@ struct MacNagsView: View {
         .toolbar {
             ToolbarItem {
                 Button("Clear done", systemImage: "checkmark.circle.badge.xmark") { model.clearFinished() }
-                    .disabled(!model.state.tasks.contains(where: \.isFinished))
+                    .disabled(!model.state.tasks.contains { $0.isFinished && !$0.isArchived })
             }
             ToolbarItem {
                 Button("New nag", systemImage: "plus") { editing = .new }
@@ -88,13 +89,13 @@ private struct MacNagRow: View {
             Button {
                 if task.isFinished { model.reopen(task.id) } else { model.complete(task.id) }
             } label: {
-                Image(systemName: done ? "checkmark.circle.fill" : "circle")
+                Image(systemName: task.isArchived ? "archivebox" : done ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
                     .contentTransition(.symbolEffect(.replace.downUp))
                     .foregroundStyle(done ? Color.green : task.isOutstanding(at: now) ? .orange : .secondary)
             }
             .buttonStyle(.plain)
-            .disabled(!task.isFinished && (model.needsPhoneScan(task) || !task.canComplete(at: now, calendar: model.calendar)))
+            .disabled(task.isArchived || (!task.isFinished && (model.needsPhoneScan(task) || !task.canComplete(at: now, calendar: model.calendar))))
 
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(task.title)
@@ -128,6 +129,14 @@ private struct MacNagRow: View {
                 Button("Started") { model.start(task.id) }
                     .controlSize(.small)
             }
+            Button(task.isArchived ? "Restore" : "Archive",
+                   systemImage: task.isArchived ? "arrow.uturn.backward" : "archivebox") {
+                model.setTaskArchived(task.id, archived: !task.isArchived)
+            }
+            .labelStyle(.iconOnly)
+            .controlSize(.small)
+            .disabled(!task.isArchived && !model.canDeleteTask(task.id))
+            .help(task.isArchived ? "Restore nag" : "Archive nag")
         }
         .padding(.vertical, Space.xs)
         .contentShape(Rectangle())
@@ -155,11 +164,13 @@ private struct MacNagRow: View {
     }
 
     private var done: Bool {
+        guard !task.isArchived else { return false }
         if task.isAwaitingPlace && task.lastCompletedAt == nil { return false }
         return task.isFinished || task.isSatisfied(at: now, calendar: model.calendar)
     }
 
     private var status: String {
+        if task.isArchived { return "Archived" }
         if task.isFinished, let at = task.completedAt { return "Done \(at.formatted(.relative(presentation: .named)))" }
         if task.isSnoozed(at: now), let until = task.snoozedUntil {
             return "Snoozed until \(until.formatted(date: .omitted, time: .shortened))"

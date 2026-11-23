@@ -19,7 +19,9 @@ struct OpenUnlockIntent: AppIntent {
         Summary("Open unlock steps for \(\.$lock)")
     }
 
-    func perform() async throws -> some IntentResult & OpensIntent {
-        .result(opensIntent: OpenURLIntent(NagRoute.unlock(profileID: lock.id).url))
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        IntentNavigation.open(.unlock(profileID: lock.id))
+        return .result()
     }
 }

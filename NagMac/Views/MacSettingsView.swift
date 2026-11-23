@@ -33,6 +33,7 @@ struct MacSettingsView: View {
             Section {
                 Toggle("Show the nag panel while nags are due", isOn: $showNagPanel)
                     .onChange(of: showNagPanel) { model.tick() }
+                Toggle("Take over from my iPhone while I'm using this Mac", isOn: settingBinding(\.deviceHandoff))
                 Toggle("Open at login", isOn: Binding(
                     get: { model.launchAtLogin },
                     set: { loginError = model.setLaunchAtLogin($0) }
@@ -43,7 +44,7 @@ struct MacSettingsView: View {
             } header: {
                 Text("On this Mac")
             } footer: {
-                Text("The nag panel sits in the corner of the screen until everything due is done. Open at login keeps locks working after a restart.")
+                Text("The nag panel sits in the corner of the screen until everything due is done. \(DeviceHandoff.explanation) Open at login keeps locks working after a restart.")
                     .foregroundStyle(.secondary)
             }
 
@@ -55,6 +56,13 @@ struct MacSettingsView: View {
                     DatePicker("From", selection: minuteBinding(\.startMinute), displayedComponents: .hourAndMinute)
                     DatePicker("Until", selection: minuteBinding(\.endMinute), displayedComponents: .hourAndMinute)
                 }
+            }
+
+            Section {
+                LabeledContent("Focus filter", value: focusFilterLabel)
+            } footer: {
+                Text("In System Settings > Focus, pick a Focus and add a Nag filter to turn on locks, quiet less urgent nags or switch quiet hours on while it's active.")
+                    .foregroundStyle(.secondary)
             }
 
             Section {
@@ -88,6 +96,13 @@ struct MacSettingsView: View {
         .formStyle(.grouped)
         .navigationTitle("Settings")
         .task { await model.refreshPermissions() }
+    }
+
+    private var focusFilterLabel: String {
+        let filter = model.state.settings.focusFilter
+        guard filter.isActive else { return "Not active" }
+        let names = model.state.profiles.filter { filter.lockIDs.contains($0.id) }.map(\.name)
+        return FocusFilterSummary.make(lockNames: names, minimumUrgency: filter.minimumUrgency, quietHours: filter.quietHours).title
     }
 
     private var notificationLabel: String {

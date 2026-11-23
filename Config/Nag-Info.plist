@@ -17,6 +17,8 @@
 	<string>$(APP_GROUP_ID)</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>Nag rings an alarm for reminders you choose, even in Silent mode or Focus.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Nag uses the camera to scan the QR code or barcode you picked as an unlock key.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
