@@ -1,3 +1,5 @@
+// The Create Reminder assistant schemas require the iOS 27 and macOS 27 SDKs.
+#if compiler(>=6.4)
 import AppIntents
 import GeoToolbox
 import NagKit
@@ -155,3 +157,4 @@ enum NagPlaceTriggerEvent: String {
         .depart: "Leave",
     ]
 }
+#endif
