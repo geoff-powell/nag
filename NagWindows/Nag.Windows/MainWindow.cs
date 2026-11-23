@@ -19,7 +19,7 @@ public sealed class MainWindow : Form
     private readonly Label subtitle = new() { AutoSize = true, ForeColor = Color.DimGray };
     private readonly Label feedback = new() { Dock = DockStyle.Bottom, Height = 34, Padding = new(20, 6, 0, 0), ForeColor = Accent };
     private readonly Dictionary<string, Button> navigation = [];
-    private string page = "Nags", filter = "Open", signature = "";
+    private string page = "Nags", filter = "All", signature = "";
     private bool exiting;
     private ReminderPanel? nagPanel;
     private DateTimeOffset lastBlockNotice;
@@ -139,8 +139,8 @@ public sealed class MainWindow : Form
         }
         body.Controls.Add(actions);
         var now = DateTimeOffset.UtcNow;
-        var reminders = state.Reminders.Where(n => filter switch { "Open" => !n.Finished, "Due" => n.Outstanding(now), "Done" => n.Finished, _ => true })
-            .OrderBy(n => n.Finished).ThenBy(n => n.Due).ToList();
+        var reminders = state.Reminders.Where(n => filter switch { "Open" => !n.Finished && !n.Archived, "Due" => n.Outstanding(now), "Done" => n.Finished && !n.Archived, _ => true })
+            .OrderBy(n => n.Archived).ThenBy(n => n.Finished).ThenBy(n => n.Due).ToList();
         if (reminders.Count == 0) AddText("A little breathing room.", "Add something you want to follow through on. Nag will keep it in sight until it's done.");
         foreach (var reminder in reminders)
         {
@@ -155,7 +155,7 @@ public sealed class MainWindow : Form
             }
             if (reminder.Snoozed(now)) card.Controls.Add(Label($"Quiet until {reminder.SnoozedUntil?.ToLocalTime():t}", 9));
             var controls = Row();
-            if (!reminder.Finished)
+            if (!reminder.Archived && !reminder.Finished)
             {
                 var done = Button("Mark done", () => Complete(reminder.Id), true);
                 done.Enabled = reminder.Repeat == Repeat.Once || reminder.Outstanding(now); controls.Controls.Add(done);
@@ -163,7 +163,12 @@ public sealed class MainWindow : Form
                 snooze.Enabled = reminder.Outstanding(now) && !reminder.Snoozed(now) && reminder.SnoozeCount < reminder.MaxSnoozes;
                 controls.Controls.Add(snooze);
             }
-            else controls.Controls.Add(Button("Reopen", () => Change(s => { var n = s.Reminders.Single(n => n.Id == reminder.Id); n.Finished = false; n.Due = DateTime.Now; })));
+            else if (!reminder.Archived) controls.Controls.Add(Button("Reopen", () => Change(s => { var n = s.Reminders.Single(n => n.Id == reminder.Id); n.Finished = false; n.Due = DateTime.Now; })));
+            controls.Controls.Add(Button(reminder.Archived ? "Restore" : "Archive", () =>
+            {
+                filter = "All";
+                Change(s => s.Reminders.Single(n => n.Id == reminder.Id).Archived = !reminder.Archived);
+            }));
             controls.Controls.Add(Button("Edit", () => Edit(reminder)));
             controls.Controls.Add(Button("Delete", () =>
             {

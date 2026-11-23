@@ -24,10 +24,12 @@ public sealed record Reminder
     [JsonRequired] public DateTimeOffset? LastNotified { get; set; }
     [JsonRequired] public bool Finished { get; set; }
 
+    public bool Archived { get; set; }
+
     // `now` is an instant; Due and quiet hours compare against its local wall clock.
-    public bool Outstanding(DateTimeOffset now) => !Finished && Due <= now.LocalDateTime;
+    public bool Outstanding(DateTimeOffset now) => !Archived && !Finished && Due <= now.LocalDateTime;
     public bool Snoozed(DateTimeOffset now) => Outstanding(now) && SnoozedUntil > now;
-    public string Status(DateTimeOffset now) => Finished ? "Done" : Snoozed(now) ? "Snoozed" : Outstanding(now) ? "Due" : "Upcoming";
+    public string Status(DateTimeOffset now) => Archived ? "Archived" : Finished ? "Done" : Snoozed(now) ? "Snoozed" : Outstanding(now) ? "Due" : "Upcoming";
     public double NotificationInterval(DateTimeOffset now)
     {
         double overdue = Math.Max(0, (now.LocalDateTime - Due).TotalMinutes);
@@ -57,7 +59,7 @@ public sealed record Reminder
     }
     public void Complete(DateTimeOffset instant)
     {
-        if (Finished) return;
+        if (Archived || Finished) return;
         DateTime now = instant.LocalDateTime;
         if (Repeat == Repeat.Once) Finished = true;
         else

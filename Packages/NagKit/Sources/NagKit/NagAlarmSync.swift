@@ -62,7 +62,7 @@ public enum NagAlarmSync {
                     date: date, title: task.title, canSnooze: (task.snoozesLeft ?? 1) > 0
                 ))
             })
-            let existingTaskIDs = Set(state.tasks.map(\.id))
+            let existingTaskIDs = Set(state.tasks.filter { !$0.isArchived }.map(\.id))
 
             // Keep unchanged alarms and cancel alarms for edited, deferred, or finished nags.
             let keptIDs = Set(records.compactMap { taskID, record -> UUID? in
