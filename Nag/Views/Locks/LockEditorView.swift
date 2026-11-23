@@ -42,13 +42,13 @@ struct LockEditorView: View {
                     Section {
                         TextField("Name, e.g. Social media", text: $profile.name)
                         ScrollView(.horizontal, showsIndicators: false) {
-                            HStack {
+                            HStack(spacing: Space.xs) {
                                 ForEach(Self.symbols, id: \.self) { symbol in
                                     Button {
                                         profile.symbol = symbol
                                     } label: {
                                         Image(systemName: symbol)
-                                            .frame(width: 36, height: 36)
+                                            .frame(width: Metrics.minTapTarget, height: Metrics.minTapTarget)
                                             .background(profile.symbol == symbol ? Color.orange.opacity(0.2) : .clear, in: Circle())
                                     }
                                     .buttonStyle(.plain)
@@ -223,17 +223,21 @@ struct WeekdayPicker: View {
 
     var body: some View {
         let ordered = (0..<7).map { (calendar.firstWeekday - 1 + $0) % 7 + 1 }
-        HStack {
+        HStack(spacing: Space.xs) {
             ForEach(ordered, id: \.self) { day in
                 let isOn = selection.contains(day)
-                Button(calendar.veryShortWeekdaySymbols[day - 1]) {
+                Button {
                     withAnimation(Motion.quick) {
                         if isOn { selection.remove(day) } else { selection.insert(day) }
                     }
+                } label: {
+                    // The frame sits inside the label so the whole circle, not just the letter, takes the tap.
+                    Text(calendar.veryShortWeekdaySymbols[day - 1])
+                        .frame(maxWidth: .infinity, minHeight: Metrics.minTapTarget)
+                        .background(isOn ? Color.orange : Color.secondary.opacity(0.15), in: Circle())
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .frame(maxWidth: .infinity, minHeight: 34)
-                .background(isOn ? Color.orange : Color.secondary.opacity(0.15), in: Circle())
                 .foregroundStyle(isOn ? .white : .primary)
                 .accessibilityLabel(calendar.weekdaySymbols[day - 1])
                 .accessibilityAddTraits(isOn ? .isSelected : [])
