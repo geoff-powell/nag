@@ -61,17 +61,17 @@ final class NagMacUITests: XCTestCase {
 
     func testMainWindowListsNags() throws {
         launch()
-        openMainWindow()
-        XCTAssertTrue(app.staticTexts["Take meds"].firstMatch.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Water the plants"].firstMatch.exists)
-        XCTAssertTrue(app.staticTexts["File taxes"].firstMatch.exists)
+        let window = openMainWindow()
+        XCTAssertTrue(window.staticTexts["Take meds"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(window.staticTexts["Water the plants"].firstMatch.exists)
+        XCTAssertTrue(window.staticTexts["File taxes"].firstMatch.exists)
         try assertSettles("with the main window open")
     }
 
     func testNewNagEditorSavesANag() throws {
         launch()
-        openMainWindow()
-        app.toolbars.buttons["New nag"].firstMatch.click()
+        let window = openMainWindow()
+        window.toolbars.buttons["New nag"].firstMatch.click()
         // The title is the editor's first field. Form rows don't expose their prompts as labels.
         let title = app.sheets.firstMatch.textFields.firstMatch
         XCTAssertTrue(title.waitForExistence(timeout: 5))
@@ -85,9 +85,10 @@ final class NagMacUITests: XCTestCase {
 
     func testEachSectionOpens() throws {
         launch()
-        openMainWindow()
+        let window = openMainWindow()
+        let sidebar = window.outlines["Sidebar"]
         for section in ["Locks", "Settings", "Nags"] {
-            let row = app.outlines.staticTexts[section].firstMatch
+            let row = sidebar.staticTexts[section].firstMatch
             XCTAssertTrue(row.waitForExistence(timeout: 5), section)
             row.click()
             try assertSettles("on \(section)")
@@ -122,10 +123,11 @@ final class NagMacUITests: XCTestCase {
     }
 
     /// Opens the main window from the menu bar extra, then closes the extra so it doesn't keep focus.
-    private func openMainWindow() {
+    private func openMainWindow() -> XCUIElement {
         openMenuBarExtra()
         app.buttons["Open Nag"].firstMatch.click()
-        let window = app.windows["Nag"].firstMatch
+        // SwiftUI uses the current section as the accessibility title of the AppKit window.
+        let window = app.windows.containing(.outline, identifier: "Sidebar").firstMatch
         XCTAssertTrue(window.waitForExistence(timeout: 5), "The main window didn't open")
         let field = app.textFields["Add a nag and press Return"].firstMatch
         if field.exists {
@@ -133,6 +135,7 @@ final class NagMacUITests: XCTestCase {
             XCTAssertTrue(waitForDisappearance(field), "The menu bar extra didn't close")
         }
         window.click()
+        return window
     }
 
     private func waitForDisappearance(_ element: XCUIElement, timeout: TimeInterval = 5) -> Bool {
