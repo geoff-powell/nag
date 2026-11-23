@@ -33,6 +33,7 @@ struct MacSettingsView: View {
             Section {
                 Toggle("Show the nag panel while nags are due", isOn: $showNagPanel)
                     .onChange(of: showNagPanel) { model.tick() }
+                Toggle("Take over from my iPhone while I'm using this Mac", isOn: settingBinding(\.deviceHandoff))
                 Toggle("Open at login", isOn: Binding(
                     get: { model.launchAtLogin },
                     set: { loginError = model.setLaunchAtLogin($0) }
@@ -43,7 +44,7 @@ struct MacSettingsView: View {
             } header: {
                 Text("On this Mac")
             } footer: {
-                Text("The nag panel sits in the corner of the screen until everything due is done. Open at login keeps locks working after a restart.")
+                Text("The nag panel sits in the corner of the screen until everything due is done. \(DeviceHandoff.explanation) Open at login keeps locks working after a restart.")
                     .foregroundStyle(.secondary)
             }
 

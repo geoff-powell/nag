@@ -20,6 +20,7 @@ final class AppModel {
     @ObservationIgnored private var changeObservation: SharedStore.ChangeObservation?
     @ObservationIgnored private var cloudSync: CloudTaskSync?
     @ObservationIgnored private var quietHoursSync: QuietHoursSync?
+    @ObservationIgnored private var heartbeatSync: DeviceHeartbeatSync?
     @ObservationIgnored private var syncTask: Task<Void, Never>?
     /// UI tests: no iCloud, and no shields, DeviceActivity schedules or notifications. On a real
     /// iPhone those are shared with the user's real Nag, so a test run must not touch them.
@@ -57,6 +58,15 @@ final class AppModel {
         }
         quietHoursSync = quietHours
         quietHours.start()
+        // A Mac starting or stopping use re-plans, so the iPhone eases off or picks the nag back up.
+        let heartbeat = DeviceHeartbeatSync(platform: .iPhone, store: store) { [weak self] in
+            Task { @MainActor in
+                self?.reload()
+                self?.sync()
+            }
+        }
+        heartbeatSync = heartbeat
+        heartbeat.start()
         sync()
     }
 
@@ -64,6 +74,7 @@ final class AppModel {
         reload()
         cloudSync?.reconcile()
         quietHoursSync?.reconcile()
+        heartbeatSync?.reconcile()
         sync()
         Task { await refreshPermissions() }
     }

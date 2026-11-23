@@ -49,6 +49,12 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Let my Mac take over", isOn: settingBinding(\.deviceHandoff))
+                } footer: {
+                    Text(DeviceHandoff.explanation)
+                }
+
+                Section {
                     LabeledContent("Focus filter", value: focusFilterLabel)
                 } footer: {
                     Text("In Settings > Focus, pick a Focus and add a Nag filter to turn on locks, quiet less urgent nags or switch quiet hours on while it's active.")
