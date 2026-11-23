@@ -362,7 +362,7 @@ private struct MacRequirementDraft: View {
                 switch kind {
                 case .tasks:
                     Section("Nags") {
-                        ForEach(model.state.tasks.filter { !$0.isFinished }) { task in
+                        ForEach(model.state.tasks.filter { !$0.isFinished && (!$0.isArchived || taskIDs.contains($0.id)) }) { task in
                             Toggle(task.title, isOn: Binding(
                                 get: { taskIDs.contains(task.id) },
                                 set: { if $0 { taskIDs.insert(task.id) } else { taskIDs.remove(task.id) } }

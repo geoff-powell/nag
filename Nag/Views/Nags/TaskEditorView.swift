@@ -175,6 +175,12 @@ struct TaskEditorView: View {
 
                 if !isNew {
                     Section {
+                        Button(task.isArchived ? "Restore nag" : "Archive nag",
+                               systemImage: task.isArchived ? "arrow.uturn.backward" : "archivebox") {
+                            model.setTaskArchived(task.id, archived: !task.isArchived)
+                            dismiss()
+                        }
+                        .disabled(!task.isArchived && !model.canDeleteTask(task.id))
                         Button("Delete nag", role: .destructive) { confirmDelete = true }
                             .disabled(!model.canDeleteTask(task.id))
                     } footer: {

@@ -228,6 +228,13 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
     public var proof: CompletionProof
     /// Set when a one-off nag is done. Repeating nags move `startAt` to the next occurrence instead.
     public var completedAt: Date?
+    struct ArchiveStatus: Codable, Hashable, Sendable {
+        var isArchived: Bool
+        var changedAt: Date
+    }
+
+    var archiveStatus: ArchiveStatus?
+    public var isArchived: Bool { archiveStatus?.isArchived == true }
     public var lastCompletedAt: Date?
     public var snoozedUntil: Date?
     /// When the current occurrence was started.
@@ -287,11 +294,10 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, title, notes, createdAt, updatedAt, startAt, repeatRule, repeatKind, repeatEvery, monthDay, times, style, proof
         case completedAt, lastCompletedAt, snoozedUntil, startedAt, snoozeCount
-        case completionUndo, undoneCompletionAt
+        case completionUndo, undoneCompletionAt, archiveStatus
         case source, externalID, link
     }
 
-    /// `times`, `source`, `externalID` and `link` are optional so nags saved by older versions still load.
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
@@ -316,6 +322,7 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         snoozedUntil = try c.decodeIfPresent(Date.self, forKey: .snoozedUntil)
         startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
         snoozeCount = try c.decode(Int.self, forKey: .snoozeCount)
+        archiveStatus = try c.decodeIfPresent(ArchiveStatus.self, forKey: .archiveStatus)
         completionUndo = try c.decodeIfPresent(CompletionUndo.self, forKey: .completionUndo)
         undoneCompletionAt = try c.decodeIfPresent(Date.self, forKey: .undoneCompletionAt)
         source = try c.decodeIfPresent(String.self, forKey: .source)
@@ -344,6 +351,7 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         try c.encodeIfPresent(snoozedUntil, forKey: .snoozedUntil)
         try c.encodeIfPresent(startedAt, forKey: .startedAt)
         try c.encode(snoozeCount, forKey: .snoozeCount)
+        try c.encodeIfPresent(archiveStatus, forKey: .archiveStatus)
         try c.encodeIfPresent(completionUndo, forKey: .completionUndo)
         try c.encodeIfPresent(undoneCompletionAt, forKey: .undoneCompletionAt)
         try c.encodeIfPresent(source, forKey: .source)
