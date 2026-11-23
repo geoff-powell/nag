@@ -86,6 +86,7 @@ public enum NagEngine {
             handoffUntil: state.settings.deviceHandoff
                 ? DeviceHandoff.handoffUntil(heartbeats: state.devices, now: now)
                 : nil,
+            wording: state.wording,
             now: now
         )
 

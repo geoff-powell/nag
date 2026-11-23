@@ -33,6 +33,40 @@ public enum NagActions {
         return try result.get()
     }
 
+    /// What finishing a routine step led to.
+    public enum StepOutcome: Hashable, Sendable {
+        /// More steps to go.
+        case nextStep
+        /// That was the last step, and the nag is done.
+        case completed
+        /// That was the last step, but the nag still needs its key scanned.
+        case needsKeyScan(keyName: String)
+    }
+
+    /// Marks a routine's current step done. Finishing the last step completes the nag the same way
+    /// `complete` does, so a nag that needs a key scan still needs it.
+    @discardableResult
+    public static func completeStep(
+        taskID: UUID,
+        store: SharedStore = .shared,
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) throws(Failure) -> StepOutcome {
+        let result: Result<StepOutcome, Failure> = store.update { state in
+            guard let index = state.tasks.firstIndex(where: { $0.id == taskID }) else { return .failure(.noSuchNag) }
+            guard state.tasks[index].hasSteps, state.tasks[index].canComplete(at: now, calendar: calendar) else {
+                return .failure(.cannotComplete)
+            }
+            guard state.tasks[index].completeCurrentStep(at: now, calendar: calendar) else { return .success(.nextStep) }
+            if let keyID = state.tasks[index].proof.keyID, let key = state.key(keyID) {
+                return .success(.needsKeyScan(keyName: key.name))
+            }
+            state.tasks[index].complete(at: now, calendar: calendar)
+            return .success(.completed)
+        }
+        return try result.get()
+    }
+
     @discardableResult
     public static func snooze(
         taskID: UUID,

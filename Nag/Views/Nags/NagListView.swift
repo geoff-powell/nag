@@ -8,6 +8,8 @@ struct NagListView: View {
     @State private var feedbackTick = 0
     @State private var undo: (taskID: UUID, deadline: Date)?
     @State private var snoozeTaskID: UUID?
+    @State private var quickText = ""
+    @State private var readingQuickAdd = false
 
     var body: some View {
         NavigationStack {
@@ -23,7 +25,10 @@ struct NagListView: View {
                 }
             }
             .sheet(item: $editor) { item in
-                TaskEditorView(task: item.task)
+                switch item {
+                case .draft(let draft): TaskEditorView(draft: draft)
+                default: TaskEditorView(task: item.task)
+                }
             }
         }
         .overlay(alignment: .bottom) {
@@ -97,6 +102,9 @@ struct NagListView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
+        .safeAreaInset(edge: .top) {
+            if model.assistantEnabled { quickAddField }
+        }
         // Also animates changes that don't come from a tap here: a nag coming due, or Done and
         // Snooze from a notification or another device.
         .animation(Motion.list, value: groups.signature)
@@ -113,9 +121,44 @@ struct NagListView: View {
         }
     }
 
+    /// Typed or dictated text like "dentist thu 3pm", read on device and opened in the editor to check.
+    private var quickAddField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "sparkles")
+                .foregroundStyle(.secondary)
+            TextField("Quick add, like “dentist thu 3pm”", text: $quickText)
+                .submitLabel(.done)
+                .onSubmit(readQuickAdd)
+                .disabled(readingQuickAdd)
+                .accessibilityIdentifier("quickAdd")
+            if readingQuickAdd {
+                ProgressView()
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
+        .padding(.bottom, 6)
+    }
+
+    private func readQuickAdd() {
+        let text = quickText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !readingQuickAdd else { return }
+        readingQuickAdd = true
+        Task {
+            defer { readingQuickAdd = false }
+            guard let draft = try? await model.quickAddDraft(text) else { return }
+            quickText = ""
+            editor = .draft(draft)
+        }
+    }
+
     private func row(_ task: NagTask, now: Date) -> some View {
         NagRow(task: task, now: now, needsScan: model.proofKey(for: task) != nil) {
             complete(task)
+        } onSteps: {
+            router.showRoutine(task.id)
         }
         .contentShape(Rectangle())
         .onTapGesture { editor = .edit(task) }
@@ -125,6 +168,12 @@ struct NagListView: View {
                     Label("Done", systemImage: "checkmark")
                 }
                 .tint(.green)
+            }
+            if task.hasSteps, task.canComplete(at: now, calendar: model.calendar) {
+                Button { router.showRoutine(task.id) } label: {
+                    Label("Steps", systemImage: "list.number")
+                }
+                .tint(.orange)
             }
             if task.isOutstanding(at: now), !task.isStarted(at: now) {
                 Button { model.start(task.id) } label: {
@@ -161,6 +210,9 @@ struct NagListView: View {
                 Link(destination: link) {
                     Label("Open original", systemImage: "arrow.up.forward.app")
                 }
+            }
+            if task.hasSteps, task.canComplete(at: now, calendar: model.calendar) {
+                Button("Step by step", systemImage: "list.number") { router.showRoutine(task.id) }
             }
             Button("Duplicate", systemImage: "plus.square.on.square") {
                 withAnimation(Motion.list) { model.duplicateTask(task.id) }
@@ -240,11 +292,14 @@ struct NagListView: View {
 enum TaskEditorItem: Identifiable {
     case new
     case edit(NagTask)
+    /// A nag read from quick-add text, waiting to be checked and saved.
+    case draft(NagDraft)
 
     var id: String {
         switch self {
         case .new: "new"
         case .edit(let task): task.id.uuidString
+        case .draft(let draft): "draft-\(draft.task.id.uuidString)"
         }
     }
 
@@ -252,6 +307,7 @@ enum TaskEditorItem: Identifiable {
         switch self {
         case .new: nil
         case .edit(let task): task
+        case .draft(let draft): draft.original
         }
     }
 }

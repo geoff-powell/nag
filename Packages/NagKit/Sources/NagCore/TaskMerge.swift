@@ -77,6 +77,7 @@ public enum TaskMerge {
             newer.startedAt = older.startedAt
             newer.completionUndo = older.completionUndo
         }
+        newer.routine = NagRoutine.merge(a.routine, b.routine)
         return newer
     }
 
@@ -106,5 +107,6 @@ extension NagState {
     public mutating func deleteTask(_ id: UUID, at now: Date) {
         tasks.removeAll { $0.id == id }
         deletedTasks[id.uuidString] = now
+        wording[id.uuidString] = nil
     }
 }

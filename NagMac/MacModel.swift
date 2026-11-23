@@ -33,6 +33,8 @@ final class MacModel {
     var unlockRequest: PresentedID?
     /// A nag from a link, shown in the editor.
     var incoming: IncomingDraft?
+    /// On-device Apple Intelligence help.
+    let assistant: any NagAssisting = NagAssistant.make()
 
     var calendar: Calendar { .current }
 
@@ -180,6 +182,7 @@ final class MacModel {
                 quietHours: state.settings.quietHours,
                 focusFilter: state.settings.focusFilter,
                 tone: state.settings.nagTone,
+                wording: state.wording,
                 now: now
             )
             await NotificationSync.apply(plan, tasks: state.tasks, now: now)
@@ -223,6 +226,41 @@ final class MacModel {
 
     func saveTask(_ task: NagTask) {
         update { $0.save(task, now: .now) }
+        refreshWordingIfNeeded(task.id)
+    }
+
+    // MARK: - Apple Intelligence
+
+    /// Apple Intelligence help is switched on in Settings and the on-device model is ready.
+    var assistantEnabled: Bool {
+        state.settings.useAppleIntelligence && assistant.isAvailable
+    }
+
+    /// Writes fresh notification lines for a nag in its tone, in the background, when it has none for
+    /// its current title and tone. Kept on this Mac only.
+    func refreshWordingIfNeeded(_ id: UUID) {
+        guard assistantEnabled, let task = state.task(id), state.needsWording(task) else { return }
+        let tone = state.tone(for: task)
+        let assistant = assistant
+        Task {
+            let lines = await assistant.wording(title: task.title, notes: task.notes, tone: tone)
+            guard !lines.isEmpty else { return }
+            update { state in
+                // The nag may have been renamed or retoned while the lines were being written.
+                guard let current = state.task(id), current.title == task.title, state.tone(for: current) == tone else { return }
+                state.setWording(lines, for: id, tone: tone, now: .now)
+            }
+        }
+    }
+
+    /// Reads typed text like "dentist thu 3pm" and opens the editor on it. Nothing is saved until the
+    /// user does. Falls back to the text as the title when the model can't read it.
+    func quickAddWithAssistant(_ text: String) async {
+        let fields = await assistant.quickAdd(text)
+        let request = QuickAddFields.request(for: text, fields: fields, now: .now, calendar: calendar)
+        guard let draft = try? draft(for: request) else { return }
+        incoming = IncomingDraft(draft: draft)
+        show(.nags)
     }
 
     /// Adds a nag from Shortcuts or Siri, or updates the one made earlier from the same source item.
@@ -288,6 +326,20 @@ final class MacModel {
     func complete(_ id: UUID) {
         guard let task = state.task(id), !needsPhoneScan(task) else { return }
         mutateTask(id) { $0.complete(at: .now, calendar: calendar) }
+    }
+
+    /// Marks a routine's current step done. The last step completes the nag, unless it needs a key scan
+    /// on the iPhone, in which case it waits there with every step done.
+    func completeStep(_ id: UUID) {
+        guard let task = state.task(id), task.hasSteps else { return }
+        let needsScan = needsPhoneScan(task)
+        let calendar = calendar
+        mutateTask(id) { task in
+            let now = Date.now
+            if task.completeCurrentStep(at: now, calendar: calendar), !needsScan {
+                task.complete(at: now, calendar: calendar)
+            }
+        }
     }
 
     func snooze(_ id: UUID) {

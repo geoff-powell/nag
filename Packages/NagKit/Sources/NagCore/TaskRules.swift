@@ -120,6 +120,7 @@ extension NagTask {
             proof: proof,
             source: source,
             link: link,
+            steps: steps.map { RoutineStep(title: $0.title, estimateMinutes: $0.estimateMinutes) },
             now: now
         )
     }
@@ -193,7 +194,7 @@ extension NagTask {
 
     public func workingUntil() -> Date? {
         guard let startedAt, startedAt >= startAt else { return nil }
-        return startedAt.addingTimeInterval(TimeInterval(style.workMinutes * 60))
+        return startedAt.addingTimeInterval(workSeconds)
     }
 
     public func isWorking(at now: Date) -> Bool {

@@ -149,6 +149,7 @@ public struct NagPlanner: Sendable {
         focusFilter: FocusFilter = FocusFilter(),
         tone: NagTone = .standard,
         handoffUntil: Date? = nil,
+        wording: [String: NagWording] = [:],
         now: Date
     ) -> NagPlan {
         let outstandingCount = tasks.filter { $0.isOutstanding(at: now) }.count
@@ -180,8 +181,13 @@ public struct NagPlanner: Sendable {
             if checkIn, let workingUntil = task.workingUntil() { considerWake(workingUntil) }
             let category = NagID.Category.forTask(task, canSnooze: (task.snoozesLeft ?? 1) > 0)
             let filterCriteria = FocusUrgency.filterCriteria(for: task.style)
+            let step = NagMessages.stepLine(for: task)
+            // Lines written on this device for this nag, if they still fit its title and tone.
+            let pool = wording[task.id.uuidString].flatMap { $0.applies(to: task, tone: effectiveTone) ? $0.lines : nil }
             let contentKey = StableHash.hex(
                 "\(task.title)|\(task.notes)|\(category)|\(task.style.breakThroughFocus)|\(filterCriteria)|\(effectiveTone.rawValue)|\(checkIn)"
+                    + (step.map { "|\($0)" } ?? "")
+                    + (pool.map { "|w:\($0.joined(separator: "\n"))" } ?? "")
             )
             let prefix = "\(NagID.nagNotificationPrefix)\(task.id.uuidString)|"
 
@@ -195,9 +201,10 @@ public struct NagPlanner: Sendable {
                     taskID: task.id,
                     trigger: .every(seconds: seconds),
                     title: task.title,
-                    body: checkIn
+                    body: NagMessages.withStep(step, checkIn
                         ? NagMessages.checkInRepeatingBody(title: task.title, tone: effectiveTone)
-                        : NagMessages.repeatingBody(title: task.title, tier: tier, tone: effectiveTone),
+                        : NagMessages.pooledRepeatingLine(pool, tier: tier)
+                            ?? NagMessages.repeatingBody(title: task.title, tier: tier, tone: effectiveTone)),
                     category: category,
                     timeSensitive: task.style.breakThroughFocus,
                     filterCriteria: filterCriteria
@@ -235,20 +242,20 @@ public struct NagPlanner: Sendable {
                     taskID: task.id,
                     trigger: .at(date),
                     title: task.title,
-                    body: checkIn
+                    body: NagMessages.withStep(step, checkIn
                         ? NagMessages.checkInBody(
                             title: task.title,
                             number: number,
                             working: date.timeIntervalSince(start),
                             tone: effectiveTone
                         )
-                        : NagMessages.body(
+                        : NagMessages.pooledLine(pool, number: number) ?? NagMessages.body(
                             title: task.title,
                             notes: task.notes,
                             number: number,
                             overdue: overdue,
                             tone: effectiveTone
-                        ),
+                        )),
                     category: category,
                     timeSensitive: task.style.breakThroughFocus,
                     filterCriteria: filterCriteria
@@ -384,6 +391,19 @@ public enum NagMessages {
         let late = NagFormat.duration(overdue)
         let lines = lines(for: tone, tier: tier(overdue: overdue), number: number, late: late)
         return lines[number % lines.count]
+    }
+
+    /// "Step 2 of 5: Shoes on" for a routine, or `nil` for a plain nag.
+    public static func stepLine(for task: NagTask) -> String? {
+        guard let label = task.stepLabel else { return nil }
+        guard let step = task.currentStep else { return label }
+        return "\(label): \(step.title)"
+    }
+
+    /// Puts the current step first, so it shows even when the body is cut short.
+    public static func withStep(_ step: String?, _ body: String) -> String {
+        guard let step else { return body }
+        return "\(step)\n\(body)"
     }
 
     public static func repeatingBody(title: String, tier: Int, tone: NagTone = .standard) -> String {

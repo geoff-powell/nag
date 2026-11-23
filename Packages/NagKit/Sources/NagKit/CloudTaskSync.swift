@@ -8,6 +8,9 @@ import NagCore
 /// Without the iCloud entitlement this quietly does nothing.
 public final class CloudTaskSync: @unchecked Sendable {
     public static let storageKey = "nag.tasks.v1"
+    /// Routine steps and progress by nag ID. Kept apart from `storageKey` because builds from before
+    /// routines rewrite nags without fields they don't know; they never touch this key.
+    public static let routinesKey = "nag.routines.v1"
 
     private let store: SharedStore
     private let cloud: NSUbiquitousKeyValueStore
@@ -40,9 +43,13 @@ public final class CloudTaskSync: @unchecked Sendable {
 
     /// Merges the local and iCloud copies and writes back to whichever side is behind.
     public func reconcile(now: Date = .now) {
-        let remote = cloud.data(forKey: Self.storageKey)
+        let remoteTasks = cloud.data(forKey: Self.storageKey)
             .flatMap { try? JSONDecoder().decode(SyncedTasks.self, from: $0) }
             ?? SyncedTasks()
+        let remoteRoutines = cloud.data(forKey: Self.routinesKey)
+            .flatMap { try? JSONDecoder().decode([String: NagRoutine].self, from: $0) }
+            ?? [:]
+        let remote = RoutineSidecar.join(remoteTasks, routines: remoteRoutines)
 
         var localChanged = false
         let merged = store.update { state -> SyncedTasks in
@@ -55,8 +62,13 @@ public final class CloudTaskSync: @unchecked Sendable {
             return merged
         }
 
-        if merged != remote, let data = try? JSONEncoder().encode(merged) {
+        let tasks = RoutineSidecar.split(merged).tasks
+        if tasks != remoteTasks, let data = try? JSONEncoder().encode(tasks) {
             cloud.set(data, forKey: Self.storageKey)
+        }
+        let routines = RoutineSidecar.routines(for: merged, keeping: remoteRoutines)
+        if routines != remoteRoutines, let data = try? JSONEncoder().encode(routines) {
+            cloud.set(data, forKey: Self.routinesKey)
         }
         if localChanged { onLocalChange() }
     }

@@ -14,6 +14,8 @@ final class AppModel {
     private(set) var state: NagState
     private(set) var screenTimeStatus: AuthorizationStatus
     private(set) var notificationStatus: UNAuthorizationStatus = .notDetermined
+    /// On-device Apple Intelligence help. Never available in UI tests.
+    let assistant: any NagAssisting
 
     var calendar: Calendar { .current }
 
@@ -29,6 +31,7 @@ final class AppModel {
     init(store: SharedStore, isolated: Bool = false) {
         self.store = store
         self.isolated = isolated
+        self.assistant = isolated ? UnavailableNagAssistant() : NagAssistant.make()
         self.state = store.load()
         self.screenTimeStatus = AuthorizationCenter.shared.authorizationStatus
     }
@@ -129,6 +132,38 @@ final class AppModel {
 
     func saveTask(_ task: NagTask) {
         update { $0.save(task, now: .now) }
+        refreshWordingIfNeeded(task.id)
+    }
+
+    // MARK: - Apple Intelligence
+
+    /// Apple Intelligence help is switched on in Settings and the on-device model is ready.
+    var assistantEnabled: Bool {
+        state.settings.useAppleIntelligence && assistant.isAvailable
+    }
+
+    /// Writes fresh notification lines for a nag in its tone, in the background, when it has none for
+    /// its current title and tone. Kept on this device only.
+    func refreshWordingIfNeeded(_ id: UUID) {
+        guard assistantEnabled, let task = state.task(id), state.needsWording(task) else { return }
+        let tone = state.tone(for: task)
+        let assistant = assistant
+        Task {
+            let lines = await assistant.wording(title: task.title, notes: task.notes, tone: tone)
+            guard !lines.isEmpty else { return }
+            update { state in
+                // The nag may have been renamed or retoned while the lines were being written.
+                guard let current = state.task(id), current.title == task.title, state.tone(for: current) == tone else { return }
+                state.setWording(lines, for: id, tone: tone, now: .now)
+            }
+        }
+    }
+
+    /// What typed text like "dentist thu 3pm" would save, for the editor to show. Falls back to the text
+    /// as the title when the model can't read it.
+    func quickAddDraft(_ text: String) async throws(NagRequestError) -> NagDraft {
+        let fields = await assistant.quickAdd(text)
+        return try draft(for: QuickAddFields.request(for: text, fields: fields, now: .now, calendar: calendar))
     }
 
     /// Adds a nag from Shortcuts or Siri, or updates the one made earlier from the same source item.
@@ -196,6 +231,17 @@ final class AppModel {
         // the app can never bypass proof requirements.
         mutateTask(id) { $0.complete(at: .now, calendar: calendar) }
         return true
+    }
+
+    /// Marks a routine's current step done. The last step completes the nag, unless it needs a key scan,
+    /// which is returned so the caller can ask for it.
+    @discardableResult
+    func completeStep(_ id: UUID) -> NagActions.StepOutcome? {
+        var outcome: NagActions.StepOutcome?
+        perform { store in
+            outcome = try NagActions.completeStep(taskID: id, store: store, now: .now, calendar: calendar)
+        }
+        return outcome
     }
 
     func reopen(_ id: UUID) {

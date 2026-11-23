@@ -104,8 +104,19 @@ private struct MacNagRow: View {
                 Text(status)
                     .font(.caption)
                     .foregroundStyle(task.isOutstanding(at: now) && !task.isSnoozed(at: now) ? Color.orange : Color.secondary)
+                if let stepLabel = task.stepLabel, task.canComplete(at: now, calendar: model.calendar) {
+                    Label(task.currentStep.map { "\(stepLabel) · \($0.title)" } ?? stepLabel, systemImage: "list.number")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
             Spacer()
+            if task.hasSteps, task.currentStep != nil, task.canComplete(at: now, calendar: model.calendar) {
+                Button("Next step") { model.completeStep(task.id) }
+                    .controlSize(.small)
+                    .help(task.remainingSteps.count > 1 ? "Mark this step done" : "Mark the last step done")
+            }
             if model.needsPhoneScan(task) {
                 Image(systemName: "iphone.radiowaves.left.and.right")
                     .foregroundStyle(.secondary)
@@ -113,6 +124,10 @@ private struct MacNagRow: View {
             }
             if task.isRepeating {
                 Image(systemName: "repeat").foregroundStyle(.secondary).help(task.repeatLabel)
+            }
+            if task.hasSteps {
+                Image(systemName: "list.number").foregroundStyle(.secondary)
+                    .help("\(task.steps.count) step\(task.steps.count == 1 ? "" : "s")")
             }
             if let source = task.source {
                 Image(systemName: "arrow.down.app").foregroundStyle(.secondary).help("From \(source)")
@@ -195,6 +210,13 @@ struct MacTaskEditor: View {
     @State private var task: NagTask
     @State private var startNow: Bool
     @State private var limitSnoozes: Bool
+    @State private var suggesting: Suggestion?
+
+    /// Apple Intelligence help in progress.
+    private enum Suggestion {
+        case firstStep
+        case steps
+    }
 
     init(task: NagTask?) {
         self.init(task: task ?? NagTask(title: ""), original: task, startNow: task == nil)
@@ -242,6 +264,9 @@ struct MacTaskEditor: View {
                     TextField("What needs doing?", text: $task.title)
                     TextField("Notes, or the first tiny step", text: $task.notes, axis: .vertical)
                         .lineLimit(1...4)
+                    if model.assistantEnabled {
+                        suggestButton("Suggest a first step", for: .firstStep, action: suggestFirstStep)
+                    }
                 }
                 if task.source != nil || task.link != nil {
                     Section {
@@ -253,6 +278,7 @@ struct MacTaskEditor: View {
                         }
                     }
                 }
+                stepsSection
                 Section("When") {
                     if !isCustom {
                         if isNew { Toggle("Start nagging now", isOn: $startNow) }
@@ -343,12 +369,108 @@ struct MacTaskEditor: View {
             }
             .padding()
         }
-        .frame(width: 560, height: 600)
+        .frame(width: 560, height: 640)
         .onChange(of: task.repeatRule) { _, rule in
             if rule == .custom, task.times.isEmpty {
                 task.times = [NagTime(minute: minuteOfDay(task.startAt))]
             }
         }
+    }
+
+    private var stepsSection: some View {
+        Section {
+            ForEach(Array(task.steps.enumerated()), id: \.element.id) { index, step in
+                HStack {
+                    Text("\(index + 1).")
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    TextField("Step", text: stepBinding(step.id, \.title))
+                        .labelsHidden()
+                    Picker("Estimate", selection: stepBinding(step.id, \.estimateMinutes)) {
+                        Text("No estimate").tag(Int?.none)
+                        ForEach([1, 2, 3, 5, 10, 15, 20, 30, 45, 60], id: \.self) { Text(NagFormat.minutes($0)).tag(Int?.some($0)) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    Button("Move up", systemImage: "chevron.up") { moveStep(at: index, by: -1) }
+                        .disabled(index == 0)
+                    Button("Move down", systemImage: "chevron.down") { moveStep(at: index, by: 1) }
+                        .disabled(index == task.steps.count - 1)
+                    Button("Remove step", systemImage: "minus.circle") {
+                        task.steps.removeAll { $0.id == step.id }
+                    }
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+            }
+            .onMove { from, to in task.steps.move(fromOffsets: from, toOffset: to) }
+            HStack {
+                Button("Add step", systemImage: "plus") {
+                    task.steps.append(RoutineStep(title: ""))
+                }
+                if model.assistantEnabled, task.steps.allSatisfy({ $0.title.trimmingCharacters(in: .whitespaces).isEmpty }) {
+                    Spacer()
+                    suggestButton("Break into steps", for: .steps, action: suggestSteps)
+                }
+            }
+        } header: {
+            Text("Steps")
+        } footer: {
+            Text(task.steps.isEmpty
+                ? "Break a routine into small steps. Nag shows one at a time, and the nag is done after the last one."
+                : "Shown one at a time in the reminder panel. Each step done pauses nagging for the next step's estimate.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func suggestButton(_ title: String, for kind: Suggestion, action: @escaping () -> Void) -> some View {
+        HStack(spacing: 6) {
+            Button(title, systemImage: "sparkles", action: action)
+                .disabled(suggesting != nil || task.title.trimmingCharacters(in: .whitespaces).isEmpty)
+            if suggesting == kind {
+                ProgressView().controlSize(.small)
+            }
+        }
+    }
+
+    /// Fills the notes with a first tiny step, after anything already there. Stays editable.
+    private func suggestFirstStep() {
+        suggesting = .firstStep
+        let (title, notes) = (task.title, task.notes)
+        Task {
+            defer { suggesting = nil }
+            guard let step = await model.assistant.firstStep(title: title, notes: notes) else { return }
+            let existing = task.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            task.notes = existing.isEmpty ? step : "\(existing)\n\(step)"
+        }
+    }
+
+    /// Fills the steps with a suggested breakdown. Only offered while there are no steps to overwrite.
+    private func suggestSteps() {
+        suggesting = .steps
+        let (title, notes) = (task.title, task.notes)
+        Task {
+            defer { suggesting = nil }
+            let steps = await model.assistant.steps(title: title, notes: notes)
+            guard !steps.isEmpty else { return }
+            task.steps = steps
+        }
+    }
+
+    private func stepBinding<Value>(_ id: UUID, _ keyPath: WritableKeyPath<RoutineStep, Value>) -> Binding<Value> {
+        Binding(
+            get: { task.steps.first { $0.id == id }.map { $0[keyPath: keyPath] } ?? RoutineStep(title: "")[keyPath: keyPath] },
+            set: { value in
+                guard let index = task.steps.firstIndex(where: { $0.id == id }) else { return }
+                task.steps[index][keyPath: keyPath] = value
+            }
+        )
+    }
+
+    private func moveStep(at index: Int, by offset: Int) {
+        let target = index + offset
+        guard task.steps.indices.contains(target) else { return }
+        task.steps.swapAt(index, target)
     }
 
     private var timesSection: some View {
