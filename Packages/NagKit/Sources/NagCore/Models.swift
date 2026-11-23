@@ -576,6 +576,9 @@ public struct AppSettings: Codable, Hashable, Sendable {
     public var liveActivitiesEnabled: Bool
     /// Active Focus filter on this device.
     public var focusFilter: FocusFilter
+    /// Haptics when finishing a nag, snoozing or unlocking. Per device: some people find them too much on
+    /// one device but not another, so this never syncs.
+    public var haptics: Bool
 
     public init(
         quietHours: QuietHours = QuietHours(),
@@ -587,7 +590,8 @@ public struct AppSettings: Codable, Hashable, Sendable {
         screenTimeApproved: Bool = false,
         deviceHandoff: Bool = true,
         liveActivitiesEnabled: Bool = true,
-        focusFilter: FocusFilter = FocusFilter()
+        focusFilter: FocusFilter = FocusFilter(),
+        haptics: Bool = true
     ) {
         self.quietHours = quietHours
         self.quietHoursUpdatedAt = quietHoursUpdatedAt
@@ -599,10 +603,11 @@ public struct AppSettings: Codable, Hashable, Sendable {
         self.deviceHandoff = deviceHandoff
         self.liveActivitiesEnabled = liveActivitiesEnabled
         self.focusFilter = focusFilter
+        self.haptics = haptics
     }
 
     private enum CodingKeys: String, CodingKey {
-        case quietHours, quietHoursUpdatedAt, nagTone, emergencyUnlocksPerMonth, emergencyUnlocksUsed, hasOnboarded, screenTimeApproved
+        case quietHours, quietHoursUpdatedAt, nagTone, emergencyUnlocksPerMonth, emergencyUnlocksUsed, hasOnboarded, screenTimeApproved, haptics
         case deviceHandoff, liveActivitiesEnabled, focusFilter
     }
 
@@ -618,6 +623,7 @@ public struct AppSettings: Codable, Hashable, Sendable {
         deviceHandoff = try c.decodeIfPresent(Bool.self, forKey: .deviceHandoff) ?? true
         liveActivitiesEnabled = try c.decodeIfPresent(Bool.self, forKey: .liveActivitiesEnabled) ?? false
         focusFilter = try c.decodeIfPresent(FocusFilter.self, forKey: .focusFilter) ?? FocusFilter()
+        haptics = try c.decodeIfPresent(Bool.self, forKey: .haptics) ?? true
     }
 
     public mutating func setQuietHours(_ new: QuietHours, at now: Date) {

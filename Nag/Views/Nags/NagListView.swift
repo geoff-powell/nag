@@ -4,6 +4,7 @@ import SwiftUI
 struct NagListView: View {
     @Environment(AppModel.self) private var model
     @Environment(Router.self) private var router
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var editor: TaskEditorItem?
     @State private var feedbackTick = 0
     @State private var undo: (taskID: UUID, deadline: Date)?
@@ -29,6 +30,9 @@ struct NagListView: View {
         .overlay(alignment: .bottom) {
             if let undo {
                 HStack(spacing: Space.m) {
+                    CelebrationMark(model.celebration)
+                        .font(.title3)
+                        .foregroundStyle(.green)
                     Text("Marked done")
                     Button("Undo") {
                         withAnimation(Motion.list) {
@@ -100,7 +104,7 @@ struct NagListView: View {
         // Also animates changes that don't come from a tap here: a nag coming due, or Done and
         // Snooze from a notification or another device.
         .animation(Motion.list, value: groups.signature)
-        .sensoryFeedback(.selection, trigger: feedbackTick)
+        .sensoryFeedback(trigger: feedbackTick) { _, _ in model.state.settings.haptics ? .selection : nil }
         // One dialog for the whole list: a dialog per row can fail to present inside a List.
         .confirmationDialog(
             "Snooze for",
@@ -182,8 +186,8 @@ struct NagListView: View {
         }
     }
 
-    /// The check button fills in place before calling this. From the swipe action, the haptic fires
-    /// here and the row waits for the swipe to close before moving to Done.
+    /// The check button fills in place and celebrates before calling this. From the swipe action, the
+    /// celebration's haptic fires here and the row waits for the swipe to close before moving to Done.
     private func complete(_ task: NagTask, fromSwipe: Bool = false) {
         if model.proofKey(for: task) != nil {
             router.showProof(for: task.id)
@@ -196,7 +200,7 @@ struct NagListView: View {
             }
             return
         }
-        feedbackTick += 1
+        model.celebrate(reduceMotion: reduceMotion)
         afterSwipeCloses {
             withAnimation(Motion.list) {
                 model.complete(task.id)
