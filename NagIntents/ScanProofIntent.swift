@@ -8,11 +8,19 @@ struct ScanProofIntent: AppIntent {
 
     @Parameter(title: "Nag", requestValueDialog: "Which nag needs a key scan?") var nag: NagEntity
 
+    init() {}
+
+    init(nag: NagEntity) {
+        self.nag = nag
+    }
+
     static var parameterSummary: some ParameterSummary {
         Summary("Scan to complete \(\.$nag)")
     }
 
-    func perform() async throws -> some IntentResult & OpensIntent {
-        .result(opensIntent: OpenURLIntent(NagRoute.scan(taskID: nag.id).url))
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        IntentNavigation.open(.scan(taskID: nag.id))
+        return .result()
     }
 }

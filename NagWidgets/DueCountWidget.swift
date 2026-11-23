@@ -1,4 +1,5 @@
 import NagCore
+import NagKit
 import SwiftUI
 import WidgetKit
 
@@ -56,7 +57,7 @@ struct DueCountView: View {
 
     @ViewBuilder private var rectangular: some View {
         if let oldest = snapshot.oldestOverdue {
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Label("\(snapshot.dueCount) nags due", systemImage: "bell.fill").font(.headline)
                 Text(oldest.title).lineLimit(1)
                 Text(oldest.dueAt, style: .relative).font(.caption)

@@ -38,7 +38,7 @@ struct UnlockView: View {
         .task(id: profileID) { await pollSteps() }
         .sheet(item: $scanning) { target in
             NavigationStack {
-                VStack(spacing: 20) {
+                VStack(spacing: Space.xl) {
                     Text("Scan \(target.key.name) to count toward unlocking.")
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -50,7 +50,7 @@ struct UnlockView: View {
                     }
                     Spacer()
                 }
-                .padding()
+                .padding(Space.l)
                 .navigationTitle("Scan key")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -72,8 +72,8 @@ struct UnlockView: View {
         let statuses = model.evaluate(profile, steps: steps, now: now)
         List {
             Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
+                VStack(alignment: .leading, spacing: Space.s) {
+                    HStack(spacing: Space.s) {
                         Image(systemName: profile.symbol).foregroundStyle(.orange)
                         Text(profile.name).font(.title2.bold())
                         Spacer()
@@ -81,7 +81,7 @@ struct UnlockView: View {
                     }
                     Text(profile.message).foregroundStyle(.secondary)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, Space.xs)
             }
 
             if let unlockedMessage {
@@ -211,12 +211,12 @@ struct RequirementRow: View {
     let action: () -> Action?
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Space.m) {
             Image(systemName: status.isMet ? "checkmark.circle.fill" : status.requirement.kind.symbol)
                 .font(.title3)
                 .foregroundStyle(status.isMet ? .green : .orange)
-                .frame(width: 28)
-            VStack(alignment: .leading, spacing: 4) {
+                .frame(width: Metrics.iconColumn)
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(status.title)
                 Text(status.detail)
                     .font(.caption)
@@ -233,7 +233,7 @@ struct RequirementRow: View {
                     .controlSize(.small)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Space.xs)
     }
 }
 

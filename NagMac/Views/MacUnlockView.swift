@@ -31,11 +31,11 @@ struct MacUnlockView: View {
         let statuses = model.evaluate(profile, now: now)
         return Form {
             Section {
-                HStack {
+                HStack(spacing: Space.s) {
                     Image(systemName: profile.symbol).foregroundStyle(.orange)
                     Text(profile.name).font(.title2.bold())
                     Spacer()
-                    MacStatusPill(profile: profile, now: now)
+                    StatusPill(profile: profile, now: now)
                 }
                 Text(profile.message).foregroundStyle(.secondary)
                 if let message {
@@ -88,10 +88,11 @@ struct MacUnlockView: View {
 
     @ViewBuilder
     private func requirementRow(_ status: RequirementStatus, profile: LockProfile) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
+        VStack(alignment: .leading, spacing: Space.s) {
+            HStack(spacing: Space.s) {
                 Image(systemName: status.isMet ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(status.isMet ? .green : .orange)
+                    .frame(width: Metrics.iconColumnCompact)
                 Text(status.title)
                 Spacer()
                 Text(status.detail).font(.caption).foregroundStyle(.secondary)
@@ -152,6 +153,7 @@ struct MacUnlockView: View {
                 Button("Done") { model.complete(task.id) }.controlSize(.small)
             }
         }
-        .padding(.leading, 24)
+        // Lines up with the requirement title: the icon column plus its gap.
+        .padding(.leading, Metrics.iconColumnCompact + Space.s)
     }
 }

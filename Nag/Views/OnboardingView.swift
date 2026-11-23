@@ -8,8 +8,8 @@ struct OnboardingView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
-                    VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: Space.xxl) {
+                    VStack(alignment: .leading, spacing: Space.s) {
                         Image(systemName: "bell.badge.fill")
                             .font(.system(size: 56))
                             .foregroundStyle(.orange)
@@ -36,7 +36,7 @@ struct OnboardingView: View {
                         detail: "Pair any NFC sticker or QR code and put it where the task happens."
                     )
 
-                    VStack(spacing: 12) {
+                    VStack(spacing: Space.m) {
                         PermissionButton(
                             title: "Allow notifications",
                             isGranted: model.notificationStatus == .authorized
@@ -59,7 +59,7 @@ struct OnboardingView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                .padding(24)
+                .padding(Space.xl)
             }
             .safeAreaInset(edge: .bottom) {
                 Button {
@@ -70,7 +70,7 @@ struct OnboardingView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .padding()
+                .padding(Space.l)
                 .background(.bar)
             }
         }
@@ -85,12 +85,12 @@ private struct FeatureRow: View {
     let detail: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
+        HStack(alignment: .top, spacing: Space.l) {
             Image(systemName: symbol)
                 .font(.title2)
                 .foregroundStyle(.orange)
-                .frame(width: 36)
-            VStack(alignment: .leading, spacing: 4) {
+                .frame(width: Metrics.iconColumn)
+            VStack(alignment: .leading, spacing: Space.xs) {
                 Text(title).font(.headline)
                 Text(detail).foregroundStyle(.secondary)
             }
@@ -107,7 +107,7 @@ struct PermissionButton: View {
         Button {
             Task { await request() }
         } label: {
-            HStack {
+            HStack(spacing: Space.s) {
                 Text(title)
                 Spacer()
                 Image(systemName: isGranted ? "checkmark.circle.fill" : "chevron.right")

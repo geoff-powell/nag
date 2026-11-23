@@ -78,6 +78,12 @@ public enum Escalation: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum NagAlarmMode: String, Codable, Hashable, Sendable {
+    case off
+    case atStart
+    case atTopTier
+}
+
 public struct NagStyle: Codable, Hashable, Sendable {
     public var intervalMinutes: Int
     public var escalation: Escalation
@@ -85,6 +91,7 @@ public struct NagStyle: Codable, Hashable, Sendable {
     /// `nil` allows unlimited snoozes.
     public var maxSnoozes: Int?
     /// Deliver nags as Time Sensitive so they can break through Focus.
+    public var alarmMode: NagAlarmMode
     public var breakThroughFocus: Bool
     /// How long a nag stays quiet after it is started.
     public var workMinutes: Int
@@ -97,6 +104,7 @@ public struct NagStyle: Codable, Hashable, Sendable {
         snoozeMinutes: Int = 10,
         maxSnoozes: Int? = 3,
         breakThroughFocus: Bool = true,
+        alarmMode: NagAlarmMode = .off,
         workMinutes: Int = 30,
         tone: NagTone? = nil
     ) {
@@ -105,12 +113,13 @@ public struct NagStyle: Codable, Hashable, Sendable {
         self.snoozeMinutes = snoozeMinutes
         self.maxSnoozes = maxSnoozes
         self.breakThroughFocus = breakThroughFocus
+        self.alarmMode = alarmMode
         self.workMinutes = workMinutes
         self.tone = tone
     }
 
     private enum CodingKeys: String, CodingKey {
-        case intervalMinutes, escalation, snoozeMinutes, maxSnoozes, breakThroughFocus, workMinutes, tone
+        case intervalMinutes, escalation, snoozeMinutes, maxSnoozes, breakThroughFocus, workMinutes, tone, alarmMode
     }
 
     /// Every field has its original default so styles saved by older versions still load.
@@ -120,6 +129,7 @@ public struct NagStyle: Codable, Hashable, Sendable {
         escalation = try c.decodeIfPresent(Escalation.self, forKey: .escalation) ?? .gentle
         snoozeMinutes = try c.decodeIfPresent(Int.self, forKey: .snoozeMinutes) ?? 10
         maxSnoozes = try c.decodeIfPresent(Int.self, forKey: .maxSnoozes)
+        alarmMode = try c.decodeIfPresent(NagAlarmMode.self, forKey: .alarmMode) ?? .off
         breakThroughFocus = try c.decodeIfPresent(Bool.self, forKey: .breakThroughFocus) ?? true
         workMinutes = min(max(try c.decodeIfPresent(Int.self, forKey: .workMinutes) ?? 30, 1), 1440)
         tone = (try? c.decodeIfPresent(String.self, forKey: .tone))
@@ -132,6 +142,7 @@ public struct NagStyle: Codable, Hashable, Sendable {
         try c.encode(escalation, forKey: .escalation)
         try c.encode(snoozeMinutes, forKey: .snoozeMinutes)
         try c.encodeIfPresent(maxSnoozes, forKey: .maxSnoozes)
+        if alarmMode != .off { try c.encode(alarmMode, forKey: .alarmMode) }
         try c.encode(breakThroughFocus, forKey: .breakThroughFocus)
         try c.encode(workMinutes, forKey: .workMinutes)
         try c.encodeIfPresent(tone?.rawValue, forKey: .tone)
@@ -217,6 +228,13 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
     public var proof: CompletionProof
     /// Set when a one-off nag is done. Repeating nags move `startAt` to the next occurrence instead.
     public var completedAt: Date?
+    struct ArchiveStatus: Codable, Hashable, Sendable {
+        var isArchived: Bool
+        var changedAt: Date
+    }
+
+    var archiveStatus: ArchiveStatus?
+    public var isArchived: Bool { archiveStatus?.isArchived == true }
     public var lastCompletedAt: Date?
     public var snoozedUntil: Date?
     /// When the current occurrence was started.
@@ -276,11 +294,10 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, title, notes, createdAt, updatedAt, startAt, repeatRule, repeatKind, repeatEvery, monthDay, times, style, proof
         case completedAt, lastCompletedAt, snoozedUntil, startedAt, snoozeCount
-        case completionUndo, undoneCompletionAt
+        case completionUndo, undoneCompletionAt, archiveStatus
         case source, externalID, link
     }
 
-    /// `times`, `source`, `externalID` and `link` are optional so nags saved by older versions still load.
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
@@ -305,6 +322,7 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         snoozedUntil = try c.decodeIfPresent(Date.self, forKey: .snoozedUntil)
         startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
         snoozeCount = try c.decode(Int.self, forKey: .snoozeCount)
+        archiveStatus = try c.decodeIfPresent(ArchiveStatus.self, forKey: .archiveStatus)
         completionUndo = try c.decodeIfPresent(CompletionUndo.self, forKey: .completionUndo)
         undoneCompletionAt = try c.decodeIfPresent(Date.self, forKey: .undoneCompletionAt)
         source = try c.decodeIfPresent(String.self, forKey: .source)
@@ -333,6 +351,7 @@ public struct NagTask: Codable, Hashable, Identifiable, Sendable {
         try c.encodeIfPresent(snoozedUntil, forKey: .snoozedUntil)
         try c.encodeIfPresent(startedAt, forKey: .startedAt)
         try c.encode(snoozeCount, forKey: .snoozeCount)
+        try c.encodeIfPresent(archiveStatus, forKey: .archiveStatus)
         try c.encodeIfPresent(completionUndo, forKey: .completionUndo)
         try c.encodeIfPresent(undoneCompletionAt, forKey: .undoneCompletionAt)
         try c.encodeIfPresent(source, forKey: .source)
@@ -412,6 +431,12 @@ public enum LockTrigger: String, Codable, Sendable {
     case manual
     case schedule
     case nags
+    case focus
+
+    public init(from decoder: any Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(String.self)
+        self = LockTrigger(rawValue: rawValue) ?? .manual
+    }
 }
 
 public struct LockSession: Codable, Hashable, Sendable {
@@ -459,6 +484,8 @@ public struct LockProfile: Codable, Hashable, Identifiable, Sendable {
     public var status: LockStatus
     /// Start of the last schedule window that switched this lock on.
     public var lastScheduledLockAt: Date?
+    /// Start of the last Focus filter activation that switched this lock on.
+    public var lastFocusLockAt: Date?
     /// After an emergency unlock, due nags don't switch the lock back on until this time.
     public var autoLockPausedUntil: Date?
 
@@ -490,6 +517,7 @@ public struct LockProfile: Codable, Hashable, Identifiable, Sendable {
         self.message = message
         self.status = .off
         self.lastScheduledLockAt = nil
+        self.lastFocusLockAt = nil
         self.autoLockPausedUntil = nil
     }
 }
@@ -542,6 +570,12 @@ public struct AppSettings: Codable, Hashable, Sendable {
     public var hasOnboarded: Bool
     /// Screen Time access was granted, so DeviceActivity can wake Nag in the background (iOS).
     public var screenTimeApproved: Bool
+    /// iPhone: ease off while a Mac is in use. Mac: take over while in use. Each device decides for itself.
+    public var deviceHandoff: Bool
+    /// Whether eligible nags and locks appear as Live Activities.
+    public var liveActivitiesEnabled: Bool
+    /// Active Focus filter on this device.
+    public var focusFilter: FocusFilter
     /// Haptics when finishing a nag, snoozing or unlocking. Per device: some people find them too much on
     /// one device but not another, so this never syncs.
     public var haptics: Bool
@@ -554,6 +588,9 @@ public struct AppSettings: Codable, Hashable, Sendable {
         emergencyUnlocksUsed: [Date] = [],
         hasOnboarded: Bool = false,
         screenTimeApproved: Bool = false,
+        deviceHandoff: Bool = true,
+        liveActivitiesEnabled: Bool = true,
+        focusFilter: FocusFilter = FocusFilter(),
         haptics: Bool = true
     ) {
         self.quietHours = quietHours
@@ -563,11 +600,15 @@ public struct AppSettings: Codable, Hashable, Sendable {
         self.emergencyUnlocksUsed = emergencyUnlocksUsed
         self.hasOnboarded = hasOnboarded
         self.screenTimeApproved = screenTimeApproved
+        self.deviceHandoff = deviceHandoff
+        self.liveActivitiesEnabled = liveActivitiesEnabled
+        self.focusFilter = focusFilter
         self.haptics = haptics
     }
 
     private enum CodingKeys: String, CodingKey {
         case quietHours, quietHoursUpdatedAt, nagTone, emergencyUnlocksPerMonth, emergencyUnlocksUsed, hasOnboarded, screenTimeApproved, haptics
+        case deviceHandoff, liveActivitiesEnabled, focusFilter
     }
 
     public init(from decoder: any Decoder) throws {
@@ -579,6 +620,9 @@ public struct AppSettings: Codable, Hashable, Sendable {
         emergencyUnlocksUsed = try c.decodeIfPresent([Date].self, forKey: .emergencyUnlocksUsed) ?? []
         hasOnboarded = try c.decodeIfPresent(Bool.self, forKey: .hasOnboarded) ?? false
         screenTimeApproved = try c.decodeIfPresent(Bool.self, forKey: .screenTimeApproved) ?? false
+        deviceHandoff = try c.decodeIfPresent(Bool.self, forKey: .deviceHandoff) ?? true
+        liveActivitiesEnabled = try c.decodeIfPresent(Bool.self, forKey: .liveActivitiesEnabled) ?? false
+        focusFilter = try c.decodeIfPresent(FocusFilter.self, forKey: .focusFilter) ?? FocusFilter()
         haptics = try c.decodeIfPresent(Bool.self, forKey: .haptics) ?? true
     }
 
@@ -599,23 +643,28 @@ public struct NagState: Codable, Hashable, Sendable {
     public var settings: AppSettings
     /// IDs of deleted nags and when they were deleted, so deletions sync between devices.
     public var deletedTasks: [String: Date]
+    /// The latest heartbeats from iCloud, copied here so the DeviceActivity monitor (which can't read
+    /// iCloud) plans with them too.
+    public var devices: [DeviceHeartbeat]
 
     public init(
         tasks: [NagTask] = [],
         profiles: [LockProfile] = [],
         keys: [UnlockKey] = [],
         settings: AppSettings = AppSettings(),
-        deletedTasks: [String: Date] = [:]
+        deletedTasks: [String: Date] = [:],
+        devices: [DeviceHeartbeat] = []
     ) {
         self.tasks = tasks
         self.profiles = profiles
         self.keys = keys
         self.settings = settings
         self.deletedTasks = deletedTasks
+        self.devices = devices
     }
 
     private enum CodingKeys: String, CodingKey {
-        case tasks, profiles, keys, settings, deletedTasks
+        case tasks, profiles, keys, settings, deletedTasks, devices
     }
 
     public init(from decoder: any Decoder) throws {
@@ -625,6 +674,7 @@ public struct NagState: Codable, Hashable, Sendable {
         keys = try c.decodeIfPresent([UnlockKey].self, forKey: .keys) ?? []
         settings = try c.decodeIfPresent(AppSettings.self, forKey: .settings) ?? AppSettings()
         deletedTasks = try c.decodeIfPresent([String: Date].self, forKey: .deletedTasks) ?? [:]
+        devices = (try? c.decodeIfPresent([DeviceHeartbeat].self, forKey: .devices)) ?? []
     }
 
     public func task(_ id: UUID) -> NagTask? { tasks.first { $0.id == id } }

@@ -40,9 +40,9 @@ struct TaskEditorView: View {
             Form {
                 Section("Start from") {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(alignment: .top, spacing: 12) {
+                        LazyHStack(alignment: .top, spacing: Space.m) {
                             ForEach(NagPreset.all) { preset in
-                                VStack(alignment: .leading, spacing: 6) {
+                                VStack(alignment: .leading, spacing: Space.s) {
                                     Button {
                                         withAnimation(Motion.list) {
                                             preset.apply(to: &task, keys: model.state.keys, now: .now, calendar: .current)
@@ -127,6 +127,13 @@ struct TaskEditorView: View {
                         ForEach(Self.workLengths, id: \.self) { Text(NagFormat.minutes($0)).tag($0) }
                     }
                     Toggle("Break through Focus", isOn: $task.style.breakThroughFocus)
+                    if #available(iOS 26, *) {
+                        Picker("Ring like an alarm", selection: $task.style.alarmMode) {
+                            Text("Off").tag(NagAlarmMode.off)
+                            Text("When nagging starts").tag(NagAlarmMode.atStart)
+                            Text("At highest escalation").tag(NagAlarmMode.atTopTier)
+                        }
+                    }
                 } header: {
                     Text("Nagging")
                 } footer: {
@@ -168,6 +175,12 @@ struct TaskEditorView: View {
 
                 if !isNew {
                     Section {
+                        Button(task.isArchived ? "Restore nag" : "Archive nag",
+                               systemImage: task.isArchived ? "arrow.uturn.backward" : "archivebox") {
+                            model.setTaskArchived(task.id, archived: !task.isArchived)
+                            dismiss()
+                        }
+                        .disabled(!task.isArchived && !model.canDeleteTask(task.id))
                         Button("Delete nag", role: .destructive) { confirmDelete = true }
                             .disabled(!model.canDeleteTask(task.id))
                     } footer: {
@@ -212,11 +225,11 @@ struct TaskEditorView: View {
     private var timesSection: some View {
         Section {
             ForEach($task.times) { $time in
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: Space.s) {
                     DatePicker("Time", selection: minuteBinding($time.minute), displayedComponents: .hourAndMinute)
                     WeekdayPicker(selection: $time.weekdays)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, Space.xs)
             }
             .onDelete { offsets in
                 withAnimation(Motion.list) { task.times.remove(atOffsets: offsets) }
@@ -260,6 +273,12 @@ struct TaskEditorView: View {
         task.alignStartToSchedule(previous: original, now: .now, calendar: model.calendar)
         if !limitSnoozes { task.style.maxSnoozes = nil }
         model.saveTask(task)
+        if #available(iOS 26, *), task.style.alarmMode != .off {
+            Task {
+                await NagAlarmSync.requestAuthorizationIfNeeded()
+                model.sync()
+            }
+        }
         dismiss()
     }
 }
