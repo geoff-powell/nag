@@ -13,6 +13,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // Shortcuts and Siri can launch Nag in the background to run an intent, so register before launch finishes.
         let model = model
         AppDependencyManager.shared.add(dependency: model)
+        let router = router
+        IntentNavigation.handler = { route in router.open(route.url, model: model) }
     }
 
     func application(

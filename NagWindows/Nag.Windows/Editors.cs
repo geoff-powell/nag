@@ -87,7 +87,7 @@ internal sealed class LockEditor : EditorWindow
         {
             if (string.IsNullOrWhiteSpace(name.Text) || paths.Count == 0) { MessageBox.Show(this, "Name your lock and choose at least one app.", "Nag"); return; }
             Result = new() { Name = name.Text.Trim(), Executables = paths, Enabled = true, WhileDue = mode.SelectedIndex == 0,
-                Until = mode.SelectedIndex == 1 ? DateTime.Now.AddMinutes((int)minutes.Value) : null };
+                Until = mode.SelectedIndex == 1 ? DateTimeOffset.UtcNow.AddMinutes((int)minutes.Value) : null };
             DialogResult = DialogResult.OK; Close();
         });
     }

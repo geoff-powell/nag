@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var screenTimeError: String?
     @State private var showVersion = false
     @State private var titleScrolledAway = false
+    @State private var systemLiveActivitiesEnabled = true
 
     var body: some View {
         NavigationStack {
@@ -48,6 +49,18 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Let my Mac take over", isOn: settingBinding(\.deviceHandoff))
+                } footer: {
+                    Text(DeviceHandoff.explanation)
+                }
+
+                Section {
+                    LabeledContent("Focus filter", value: focusFilterLabel)
+                } footer: {
+                    Text("In Settings > Focus, pick a Focus and add a Nag filter to turn on locks, quiet less urgent nags or switch quiet hours on while it's active.")
+                }
+
+                Section {
                     Picker("Nag tone", selection: settingBinding(\.nagTone)) {
                         ForEach(NagTone.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
@@ -62,6 +75,16 @@ struct SettingsView: View {
                             .accessibilityIdentifier("settings.appleIntelligence")
                     } footer: {
                         Text(model.assistant.status.settingsFooter)
+                    }
+                }
+
+                Section {
+                    Toggle("Live Activity", isOn: liveActivitiesBinding)
+                } footer: {
+                    if systemLiveActivitiesEnabled {
+                        Text("Shows your oldest overdue nag and one active lock on the Lock Screen and Dynamic Island. Open Nag to start or refresh activities; they end after 8 hours.")
+                    } else {
+                        Text("Live Activities are disabled for Nag. Enable them in iOS Settings to use this feature.")
                     }
                 }
 
@@ -107,13 +130,16 @@ struct SettingsView: View {
             } action: { _, scrolledAway in
                 withAnimation(.easeInOut(duration: 0.2)) { titleScrolledAway = scrolledAway }
             }
-            .task { await model.refreshPermissions() }
+            .task {
+                await model.refreshPermissions()
+                systemLiveActivitiesEnabled = LiveActivities.areEnabled
+            }
         }
     }
 
     /// Looks like a large navigation title. Long-press it to show the app version underneath.
     private var title: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Space.xxs) {
             Text("Settings")
                 .font(.largeTitle.bold())
                 .foregroundStyle(Color.primary)
@@ -148,6 +174,13 @@ struct SettingsView: View {
         return "Version \(version) (\(build))"
     }
 
+    private var focusFilterLabel: String {
+        let filter = model.state.settings.focusFilter
+        guard filter.isActive else { return "Not active" }
+        let names = model.state.profiles.filter { filter.lockIDs.contains($0.id) }.map(\.name)
+        return FocusFilterSummary.make(lockNames: names, minimumUrgency: filter.minimumUrgency, quietHours: filter.quietHours).title
+    }
+
     private var notificationLabel: String {
         switch model.notificationStatus {
         case .authorized: "Allowed"
@@ -161,6 +194,15 @@ struct SettingsView: View {
         Binding(
             get: { model.state.settings[keyPath: keyPath] },
             set: { value in model.updateSettings { $0[keyPath: keyPath] = value } }
+        )
+    }
+
+    private var liveActivitiesBinding: Binding<Bool> {
+        Binding(
+            get: { model.state.settings.liveActivitiesEnabled },
+            set: { enabled in
+                model.updateSettings { $0.liveActivitiesEnabled = enabled }
+            }
         )
     }
 

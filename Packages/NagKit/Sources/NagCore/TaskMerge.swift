@@ -45,6 +45,11 @@ public enum TaskMerge {
         var (newer, older) = a.updatedAt != b.updatedAt
             ? (a.updatedAt > b.updatedAt ? (a, b) : (b, a))
             : (a.id.uuidString >= b.id.uuidString && a.title >= b.title ? (a, b) : (b, a))
+        if let olderStatus = older.archiveStatus,
+           newer.archiveStatus.map({ $0.changedAt < olderStatus.changedAt
+               || ($0.changedAt == olderStatus.changedAt && olderStatus.isArchived) }) ?? true {
+            newer.archiveStatus = olderStatus
+        }
         let undone = max(a.undoneCompletionAt ?? .distantPast, b.undoneCompletionAt ?? .distantPast)
         let undoneCopy = newer.undoneCompletionAt == undone && newer.lastCompletedAt != undone
             ? newer
@@ -89,6 +94,14 @@ extension NagState {
     public mutating func apply(_ synced: SyncedTasks) {
         tasks = synced.tasks
         deletedTasks = synced.deleted
+    }
+
+    public mutating func setTaskArchived(_ id: UUID, archived: Bool, at now: Date) {
+        guard let index = tasks.firstIndex(where: { $0.id == id }),
+              tasks[index].isArchived != archived,
+              !archived || !isTaskRequiredByEngagedLock(id) else { return }
+        tasks[index].archiveStatus = NagTask.ArchiveStatus(isArchived: archived, changedAt: now)
+        tasks[index].updatedAt = now
     }
 
     public mutating func deleteTask(_ id: UUID, at now: Date) {

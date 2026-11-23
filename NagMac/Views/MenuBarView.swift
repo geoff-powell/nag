@@ -17,8 +17,8 @@ struct MenuBarView: View {
 
     private func content(now: Date) -> some View {
         let groups = MacNagGroups(tasks: model.state.tasks, now: now, calendar: model.calendar)
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
+        return VStack(alignment: .leading, spacing: Space.m) {
+            HStack(spacing: Space.s) {
                 TextField("Add a nag and press Return", text: $quickTitle)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit {
@@ -50,7 +50,7 @@ struct MenuBarView: View {
             }
 
             if let undo {
-                HStack {
+                HStack(spacing: Space.s) {
                     Text("Marked done")
                     Spacer()
                     Button("Undo") {
@@ -60,7 +60,8 @@ struct MenuBarView: View {
                     Button("Dismiss", systemImage: "xmark") { self.undo = nil }
                         .labelStyle(.iconOnly)
                 }
-                .padding(8)
+                .padding(.horizontal, Space.l)
+                .padding(.vertical, Space.s)
                 .background(.regularMaterial, in: Capsule())
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -68,7 +69,7 @@ struct MenuBarView: View {
             if !groups.later.isEmpty {
                 Text("Coming up").font(.headline)
                 ForEach(groups.later.prefix(3)) { task in
-                    HStack {
+                    HStack(spacing: Space.s) {
                         Text(task.title).lineLimit(1)
                         Spacer()
                         Text(task.startAt, format: .relative(presentation: .named))
@@ -82,13 +83,13 @@ struct MenuBarView: View {
                 Divider()
                 Text("Locks").font(.headline)
                 ForEach(model.state.profiles) { profile in
-                    HStack {
+                    HStack(spacing: Space.s) {
                         Image(systemName: profile.symbol)
                             .foregroundStyle(profile.isShielding(at: now) ? .orange : .secondary)
-                            .frame(width: 18)
+                            .frame(width: Metrics.iconColumnCompact)
                         Text(profile.name).lineLimit(1)
                         Spacer()
-                        MacStatusPill(profile: profile, now: now)
+                        StatusPill(profile: profile, now: now)
                         switch profile.status {
                         case .off:
                             Button("Lock") { model.lockNow(profile.id) }
@@ -113,7 +114,7 @@ struct MenuBarView: View {
                     .help(model.strictEngagedLock.map { "“\($0.name)” is in strict mode" } ?? "Quit Nag")
             }
         }
-        .padding(14)
+        .padding(Space.m)
         .animation(.snappy(duration: 0.38), value: undo?.deadline)
     }
 
@@ -145,8 +146,8 @@ private struct MenuNagRow: View {
     @Environment(MacModel.self) private var model
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .firstTextBaseline, spacing: Space.s) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(task.title).fontWeight(.medium).lineLimit(2)
                 Text(status)
                     .font(.caption)
@@ -197,46 +198,18 @@ private struct MenuNagRow: View {
     }
 }
 
-struct MacStatusPill: View {
-    let profile: LockProfile
-    let now: Date
-
-    var body: some View {
-        Text(text)
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(color.opacity(0.15), in: Capsule())
-            .foregroundStyle(color)
-    }
-
-    private var text: String {
-        switch profile.status {
-        case .off: "Off"
-        case .locked: "Locked"
-        case .unlocked(_, let until):
-            until > now ? "Open until \(until.formatted(date: .omitted, time: .shortened))" : "Locking…"
-        }
-    }
-
-    private var color: Color {
-        switch profile.status {
-        case .off: .secondary
-        case .locked: .orange
-        case .unlocked: .green
-        }
-    }
-}
-
 /// Splits nags into due now, coming up, and done today.
 struct MacNagGroups {
     var now: [NagTask] = []
     var later: [NagTask] = []
     var done: [NagTask] = []
+    var archived: [NagTask] = []
 
     init(tasks: [NagTask], now date: Date, calendar: Calendar) {
         for task in tasks {
-            if task.isOutstanding(at: date) {
+            if task.isArchived {
+                archived.append(task)
+            } else if task.isOutstanding(at: date) {
                 now.append(task)
             } else if task.isFinished || task.lastCompletedAt.map({ calendar.isDate($0, inSameDayAs: date) }) == true {
                 done.append(task)

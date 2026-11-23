@@ -81,7 +81,11 @@ public enum NagEngine {
         let plan = planner.plan(
             tasks: state.tasks,
             quietHours: state.settings.quietHours,
+            focusFilter: state.settings.focusFilter,
             tone: state.settings.nagTone,
+            handoffUntil: state.settings.deviceHandoff
+                ? DeviceHandoff.handoffUntil(heartbeats: state.devices, now: now)
+                : nil,
             wording: state.wording,
             now: now
         )
@@ -92,6 +96,9 @@ public enum NagEngine {
             }
         }
         await NotificationSync.apply(plan, tasks: state.tasks, now: now)
+        if #available(iOS 26, *), Bundle.main.bundleURL.pathExtension == "app" {
+            await NagAlarmSync.apply(state: store.load(), now: .now, calendar: calendar)
+        }
 
         for profile in autoUnlocked {
             await NotificationSync.alert(
@@ -116,6 +123,8 @@ public enum NagEngine {
 
     /// For DeviceActivity callbacks, which are synchronous: runs `sync` and waits for it, bounded so the
     /// extension is never stuck.
+    /// Live Activities are deliberately excluded: v1 keeps ActivityKit writes in the foreground app
+    /// instead of relying on the monitor extension's tight and unverified execution budget.
     public static func handleActivityCallback(store: SharedStore = .shared) {
         let finished = DispatchSemaphore(value: 0)
         Task.detached {

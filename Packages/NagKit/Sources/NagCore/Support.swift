@@ -8,6 +8,10 @@ public enum NagID {
     /// Every nag notification identifier starts with this, so sync never touches other notifications.
     public static let nagNotificationPrefix = "nag|"
 
+    public enum Control {
+        public static let lockNow = "LockNow"
+    }
+
     public enum Category {
         public static let nag = "NAG"
         public static let nagNoSnooze = "NAG_NO_SNOOZE"
