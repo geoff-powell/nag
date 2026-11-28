@@ -42,6 +42,9 @@ class MainActivity : ComponentActivity() {
     private var selected by mutableStateOf<String?>(null)
     private var draft by mutableStateOf<Nag?>(null)
     private var message by mutableStateOf<String?>(null)
+    private lateinit var appLock: ManagedAppLock
+    private var locks by mutableStateOf(false)
+    private var managed by mutableStateOf(false)
     private var settings by mutableStateOf(false)
     private var notificationAccess by mutableStateOf(false)
     private var exactAccess by mutableStateOf(false)
@@ -53,12 +56,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         store = NagStore(this)
+        appLock = ManagedAppLock(this)
         state = store.read()
         store.preferences.registerOnSharedPreferenceChangeListener(listener)
         if (savedInstanceState == null) route(intent)
         else {
             selected = savedInstanceState.getString("selected")
             settings = savedInstanceState.getBoolean("settings")
+            locks = savedInstanceState.getBoolean("locks")
             draft = savedInstanceState.getString("draft")?.let { NagState.decode(it).nags.single() }
         }
         setContent {
@@ -75,6 +80,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        managed = appLock.managed
         notificationAccess = getSystemService(NotificationManager::class.java).areNotificationsEnabled()
         exactAccess = Build.VERSION.SDK_INT < 31 || getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
         Reminders.schedule(this)
@@ -89,6 +95,7 @@ class MainActivity : ComponentActivity() {
         super.onSaveInstanceState(outState)
         outState.putString("selected", selected)
         outState.putBoolean("settings", settings)
+        outState.putBoolean("locks", locks)
         draft?.let { outState.putString("draft", NagState(nags = listOf(it)).encode()) }
     }
 
@@ -123,6 +130,7 @@ class MainActivity : ComponentActivity() {
         runCatching {
             draft = null
             settings = false
+            locks = false
             selected = null
             when ((uri.host ?: uri.path?.trim('/'))?.lowercase()) {
                 "nags" -> Unit
@@ -133,7 +141,7 @@ class MainActivity : ComponentActivity() {
                         ?: error("Nag not found on this device")
                 }
                 "add", "new" -> save(nagFromLink(uri, now, state.nags))
-                "locks", "unlock" -> error("App locks are unavailable on Android")
+                "locks", "unlock" -> locks = true
                 "scan" -> error("Scan proof is unavailable on Android")
                 else -> error("Unknown Nag link")
             }
@@ -189,25 +197,31 @@ class MainActivity : ComponentActivity() {
         var deletion by remember { mutableStateOf<Nag?>(null) }
         val current = state.nags.firstOrNull { it.id == selected }
         val editor = draft
-        PredictiveBackHandler(editor != null || settings || selected != null) { progress ->
+        PredictiveBackHandler(editor != null || settings || locks || selected != null) { progress ->
             progress.collect {}
             when {
                 editor != null -> draft = null
                 settings -> settings = false
+                locks -> locks = false
                 else -> selected = null
             }
         }
         Scaffold(snackbarHost = { SnackbarHost(snackbar) }, topBar = {
-            TopAppBar(title = { Text(if (settings) "Settings" else "Nags") }, actions = {
-                if (!settings) TextButton(onClick = { settings = true }) { Text("Settings") }
+            TopAppBar(title = { Text(when { settings -> "Settings"; locks -> "Locks"; else -> "Nags" }) }, actions = {
+                if (!settings && !locks) {
+                    TextButton(onClick = { locks = true }) { Text("Locks") }
+                    TextButton(onClick = { settings = true }) { Text("Settings") }
+                } else TextButton(onClick = { settings = false; locks = false }) { Text("Nags") }
             })
         }, floatingActionButton = {
-            if (!settings) ExtendedFloatingActionButton(onClick = { draft = newNag() },
+            if (!settings && !locks) ExtendedFloatingActionButton(onClick = { draft = newNag() },
                 text = { Text("New nag") }, icon = { Text("+") })
         }) { padding ->
             BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
                 val wide = maxWidth >= 720.dp
-                if (settings) {
+                if (locks) {
+                    AppLocks(appLock, managed) { startActivity(Intent(Settings.ACTION_SETTINGS)) }
+                } else if (settings) {
                     SettingsContent(state.quiet, notificationAccess, exactAccess,
                         onNotifications = {
                             if (Build.VERSION.SDK_INT >= 33 &&
