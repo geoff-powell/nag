@@ -7,6 +7,9 @@ A standalone native [Windows client](NagWindows/README.md) is available in `NagW
 recurring reminders, tray notifications and voluntary app locks. Its storage is independent of the
 Apple apps; iCloud sync is not available on Windows.
 
+The [Android client](NagAndroid/README.md) offers local nags, recurring reminders, notification
+actions, and a home screen widget.
+
 - **Nags** keep reminding you until something is actually done. They come more often the longer it
   waits, snoozes are limited, and the wording gets pushier. Nags can need a physical key scanned to
   finish (an NFC sticker on the pill bottle, say).
